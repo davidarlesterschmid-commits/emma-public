@@ -1,0 +1,59 @@
+# Melos + Flutter — matches local workflow (AGENTS.md / root pubspec melos:).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Linear issue key
+        if: github.event_name == 'pull_request'
+        run: |
+          pr_title="$(jq -r '.pull_request.title // ""' "$GITHUB_EVENT_PATH")"
+          pr_body="$(jq -r '.pull_request.body // ""' "$GITHUB_EVENT_PATH")"
+          head_ref="$(jq -r '.pull_request.head.ref // ""' "$GITHUB_EVENT_PATH")"
+          linear_key_regex='[A-Z][A-Z0-9]+-[0-9]+'
+
+          if ! printf '%s\n%s\n%s\n' "$head_ref" "$pr_title" "$pr_body" | grep -Eiq "$linear_key_regex"; then
+            echo "::error::Missing Linear issue key. Put an issue key such as EMM-123 or emm-123 in the branch name, PR title, or PR body."
+            exit 1
+          fi
+
+      # Python tooling tests (governance / cross-cutting). Independent of Flutter,
+      # runs early for fast feedback. See tools/tests/ and EMM-235.
+      - name: Python tooling tests
+        run: python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Add pub executables to PATH
+        run: echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
+
+      - name: Install Melos
+        run: dart pub global activate melos
+
+      - name: Resolve workspace
+        run: dart pub get
+
+      - name: Melos bootstrap
+        run: melos bootstrap
+
+      - name: Analyze
+        run: melos run analyze
+
+      - name: Unit tests (Dart packages)
+        run: melos run test:unit
+
+      - name: Flutter tests
+        run: melos run test:flutter

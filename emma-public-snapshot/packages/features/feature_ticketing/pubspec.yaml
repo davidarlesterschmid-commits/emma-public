@@ -1,0 +1,21 @@
+name: feature_ticketing
+description: Ticketing catalog UI (M03) — no Riverpod in package.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  domain_ticketing: any
+  intl: any
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: any
+
+flutter:
+  uses-material-design: true

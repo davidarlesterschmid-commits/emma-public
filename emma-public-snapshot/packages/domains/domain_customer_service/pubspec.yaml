@@ -1,0 +1,12 @@
+name: domain_customer_service
+description: Customer-service / support domain — support cases, incident handling contracts.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies: {}
+
+dev_dependencies:
+  test: any

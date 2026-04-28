@@ -1,0 +1,462 @@
+# PR-Body: Pflichtangaben (Linear, Risikoklasse, Modul, Funktions-ID) — keine Tests ausgefuehrt.
+#
+# Kontext:
+# - Intendierter Stand stammt aus PR #52 (EMM-143).
+# - PR #53 (EMM-139) hatte "keine CI/Workflow-Aenderung" im Nicht-Scope, hat aber trotzdem diese Datei
+#   veraendert und dabei eine zweite Workflow-Definition eingefuegt. Diese Datei stellt wieder den
+#   Single-Workflow-Stand her.
+
+name: PR governance
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled, ready_for_review]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: pr-governance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  comment-retrigger:
+    if: github.event_name == 'issue_comment'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retrigger governance on marker comment
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
+              event = json.load(f)
+          
+          comment = (event.get("comment") or {}).get("body") or ""
+          marker_starts = (
+              "<!-- EMMA_CLAUDE_MARKER_START -->",
+              "<!-- EMMA_REVIEW_MARKER_START -->",
+          )
+          if not any(marker in comment for marker in marker_starts):
+              print("No LLM gate marker in comment — skip.")
+              sys.exit(0)
+
+          # Allow other PR governance jobs to evaluate on this event type.
+          print("LLM gate marker comment created — governance will rerun.")
+          PY
+
+  pr-body:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce PR description fields
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          import sys
+
+          def err(msg: str) -> None:
+              print(f"::error::PR governance: {msg}")
+
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
+              event = json.load(f)
+          body = (event.get("pull_request") or {}).get("body") or ""
+          title = (event.get("pull_request") or {}).get("title") or ""
+          is_draft = (event.get("pull_request") or {}).get("draft") is True
+
+          if is_draft:
+              print("Skipping governance check for draft PR.")
+              sys.exit(0)
+
+          if not body.strip():
+              err("PR body is empty — fill the PR template (Linear, Risikoklasse, Modul, Funktions-ID).")
+              sys.exit(1)
+
+          def section_by_header(body: str, name: str) -> str:
+              pat = re.compile(rf"^##\s+{re.escape(name)}\s*$", re.I | re.M)
+              m = pat.search(body)
+              if not m:
+                  return ""
+              rest = body[m.end() :]
+              m2 = re.search(r"^##\s+\S", rest, re.M)
+              if m2:
+                  return rest[: m2.start()]
+              return rest
+
+          failed = False
+          sec_risiko = section_by_header(body, "Risikoklasse")
+          if not sec_risiko.strip():
+              sec_risiko = body
+
+          # 1) Linear: EMM-123 (digits required; template has only EMM-)
+          if not re.search(r"EMM-\d+", body, re.I):
+              err("Missing Linear ID — include an issue key such as EMM-123 in the PR body.")
+              failed = True
+
+          # 2) Risikoklasse: explicit **R0** … **R5** in Risikoklasse-Block
+          if not re.search(r"\*\*R[0-5]\*\*", sec_risiko):
+              err("Missing explicit Risikoklasse under ## Risikoklasse — use a line like '- **R2**' (one of R0–R5).")
+              failed = True
+
+          # 3) Modul: M01–M14
+          if not re.search(r"\bM(0[1-9]|1[0-4])\b", body):
+              err("Missing module reference M01–M14 — name at least one (e.g. M02) in the PR body.")
+              failed = True
+
+          # 4) Funktions-ID: MXX-FXX or explicit “nicht zutreffend”/N/A with short reason
+          func = re.search(r"\bM[0-9]{2}-F[0-9]{2}\b", body, re.I)
+          na = re.search(
+              r"(?i)(?:nicht\s+zutreffend|n/a|nicht\s+anwendbar)\s*[:-]\s*(\S.{7,}|\S+\s+.{3,})",
+              body,
+          )
+          if not func and not na:
+              err(
+                  "Missing Funktions-ID — add a catalog ID like M07-F12 (Mxx-Fxx) in the PR body, "
+                  "or a line such as 'Nicht zutreffend: <reason>…' (min. ~8 chars of reason).",
+              )
+              failed = True
+
+          # 5) Optional: R2 → Tests section should not be only boilerplate/empty
+          risk_m = re.search(r"\*\*R([0-5])\*\*", sec_risiko)
+          if risk_m and risk_m.group(1) == "2":
+              sec_tests = section_by_header(body, "Tests")
+              if not sec_tests.strip():
+                  err("Risikoklasse is R2 but no or empty '## Tests' section — document commands run or justified omission.")
+                  failed = True
+              else:
+                  lean = re.sub(r"[-*`#\s]+", " ", sec_tests)
+                  lean = re.sub(r"\s+", " ", lean).strip()
+                  if len(lean) < 20:
+                      err("Risikoklasse R2: fill the 'Tests' section (commands run or a short justified omission).")
+                      failed = True
+
+          if failed:
+              print("---")
+              print("PR title (context):", title[:200])
+              sys.exit(1)
+
+          print("PR governance: required fields found.")
+          PY
+
+  r3-gate:
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: R3+ requires label approved:r3
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          import sys
+
+          def err(msg: str) -> None:
+              print(f"::error::R3 gate: {msg}")
+
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
+              event = json.load(f)
+          pr = event.get("pull_request") or {}
+          body = pr.get("body") or ""
+
+          def section_by_header(body: str, name: str) -> str:
+              pat = re.compile(rf"^##\s+{re.escape(name)}\s*$", re.I | re.M)
+              m = pat.search(body)
+              if not m:
+                  return ""
+              rest = body[m.end() :]
+              m2 = re.search(r"^##\s+\S", rest, re.M)
+              if m2:
+                  return rest[: m2.start()]
+              return rest
+
+          sec_risiko = section_by_header(body, "Risikoklasse")
+          if not sec_risiko.strip():
+              sec_risiko = body
+
+          m = re.search(r"\*\*R([0-5])\*\*", sec_risiko)
+          if not m or m.group(1) not in ("3", "4", "5"):
+              print("R3 gate: not R3/R4/R5 in Risikoklasse — skip.")
+              sys.exit(0)
+
+          names = {lb.get("name", "") for lb in pr.get("labels") or []}
+          if "approved:r3" in names:
+              print("R3 gate: label approved:r3 present.")
+              sys.exit(0)
+
+          err("Risikoklasse R3, R4 or R5 requires label approved:r3 on the PR.")
+          sys.exit(1)
+          PY
+
+  claude-gate:
+    if: github.event_name == 'pull_request' || github.event_name == 'issue_comment'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce machine-readable LLM gate for R2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          import urllib.request
+          from typing import Any
+
+          def err(msg: str) -> None:
+              print(f"::error::LLM gate: {msg}")
+
+          def info(msg: str) -> None:
+              print(f"LLM gate: {msg}")
+
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
+              event = json.load(f)
+
+          repo_full = ((event.get("repository") or {}).get("full_name") or "").strip()
+          event_name = (event.get("action") and event.get("pull_request") and "pull_request") or event.get("event_name") or ""
+          # GitHub's event payload does not include a stable "event_name" field; derive it best-effort:
+          # - pull_request events include "pull_request"
+          # - issue_comment events include "comment" + "issue"
+          if "pull_request" in event and isinstance(event.get("pull_request"), dict):
+              event_name = "pull_request"
+          elif "comment" in event and "issue" in event:
+              event_name = "issue_comment"
+          else:
+              event_name = "unknown"
+
+          token = (os.environ.get("GITHUB_TOKEN") or "").strip()
+          if not token:
+              err("GITHUB_TOKEN is not available to fetch PR metadata/comments.")
+              sys.exit(1)
+
+          def gh_get_json(url: str) -> Any:
+              req = urllib.request.Request(
+                  url,
+                  headers={
+                      "Authorization": f"Bearer {token}",
+                      "Accept": "application/vnd.github+json",
+                      "User-Agent": "emma-pr-governance",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  data = resp.read().decode("utf-8", errors="replace")
+              return json.loads(data)
+
+          pr: dict[str, Any] = {}
+          pr_number = 0
+          body = ""
+          head_sha = ""
+
+          if event_name == "pull_request":
+              pr = event.get("pull_request") or {}
+              if (pr.get("draft") is True):
+                  info("PR is draft — skip.")
+                  sys.exit(0)
+              body = pr.get("body") or ""
+              pr_number = int(pr.get("number") or 0)
+              head_sha = ((pr.get("head") or {}).get("sha") or "").strip()
+          elif event_name == "issue_comment":
+              comment_body = ((event.get("comment") or {}).get("body") or "")
+              marker_starts = (
+                  "<!-- EMMA_CLAUDE_MARKER_START -->",
+                  "<!-- EMMA_REVIEW_MARKER_START -->",
+              )
+              if not any(marker in comment_body for marker in marker_starts):
+                  info("No LLM gate marker in comment — skip.")
+                  sys.exit(0)
+              issue = event.get("issue") or {}
+              pr_number = int(issue.get("number") or 0)
+              if not repo_full or not pr_number:
+                  err("Missing repo/pr_number in issue_comment payload.")
+                  sys.exit(1)
+              api_base = f"https://api.github.com/repos/{repo_full}"
+              pr = gh_get_json(f"{api_base}/pulls/{pr_number}")
+              if not isinstance(pr, dict) or not pr.get("number"):
+                  err("Issue comment is not on a PR (failed to load PR via API).")
+                  sys.exit(1)
+              if pr.get("draft") is True:
+                  info("PR is draft — skip.")
+                  sys.exit(0)
+              body = pr.get("body") or ""
+              head_sha = str(((pr.get("head") or {}).get("sha") or "")).strip()
+          else:
+              err("Unsupported event payload shape for LLM gate.")
+              sys.exit(1)
+
+          if not pr_number or not head_sha or not repo_full:
+              err("Missing PR metadata in event payload.")
+              sys.exit(1)
+
+          def section_by_header(text: str, name: str) -> str:
+              pat = re.compile(rf"^##\s+{re.escape(name)}\s*$", re.I | re.M)
+              m = pat.search(text)
+              if not m:
+                  return ""
+              rest = text[m.end() :]
+              m2 = re.search(r"^##\s+\S", rest, re.M)
+              if m2:
+                  return rest[: m2.start()]
+              return rest
+
+          sec_risk = section_by_header(body, "Risikoklasse")
+          if not sec_risk.strip():
+              sec_risk = body
+
+          m = re.search(r"\*\*R([0-5])\*\*", sec_risk)
+          risk = f"R{m.group(1)}" if m else "?"
+
+          if risk != "R2":
+              info(f"risk={risk} (not R2) — skip.")
+              sys.exit(0)
+
+          def iter_comment_bodies(url: str) -> list[str]:
+              bodies: list[str] = []
+              page = 1
+              while page <= 10:
+                  payload = gh_get_json(f"{url}?per_page=100&page={page}")
+                  if not isinstance(payload, list) or not payload:
+                      break
+                  for item in payload:
+                      if isinstance(item, dict):
+                          bodies.append(str(item.get("body") or ""))
+                  page += 1
+              return bodies
+
+          api_base = f"https://api.github.com/repos/{repo_full}"
+          # The marker comment is often posted by GitHub Actions in a separate workflow run.
+          # On fresh PR events (e.g. synchronize), API reads can race with comment creation.
+          # Also: older marker blocks from previous head SHAs may already exist.
+          # Small bounded retry keeps the gate strict while eliminating flaky "marker missing / wrong SHA".
+          import time
+          all_text = ""
+          head_sha_u = head_sha.upper()
+          for attempt in range(12):  # ~0s..55s (5s steps)
+              issue_comments = iter_comment_bodies(f"{api_base}/issues/{pr_number}/comments")
+              review_comments = iter_comment_bodies(f"{api_base}/pulls/{pr_number}/comments")
+              all_text = "\n\n".join([*issue_comments, *review_comments])
+
+              # Wait until we can see a marker block for the current head SHA (full or 7-char prefix).
+              if "<!-- EMMA_CLAUDE_MARKER_START -->" in all_text or "<!-- EMMA_REVIEW_MARKER_START -->" in all_text:
+                  if re.search(r"(?im)^\\s*EMMA_HEAD_SHA\\s*:\\s*" + re.escape(head_sha_u[:7]) + r"(?:\\b|\\s|$)", all_text):
+                      break
+                  if re.search(r"(?im)^\\s*EMMA_HEAD_SHA\\s*:\\s*" + re.escape(head_sha_u) + r"(?:\\b|\\s|$)", all_text):
+                      break
+
+              if attempt < 11:
+                  time.sleep(5)
+
+          marker_pairs = (
+              ("<!-- EMMA_CLAUDE_MARKER_START -->", "<!-- EMMA_CLAUDE_MARKER_END -->"),
+              ("<!-- EMMA_REVIEW_MARKER_START -->", "<!-- EMMA_REVIEW_MARKER_END -->"),
+          )
+
+          blocks: list[str] = []
+          for start, end in marker_pairs:
+              cursor = 0
+              while True:
+                  s = all_text.find(start, cursor)
+                  if s < 0:
+                      break
+                  e = all_text.find(end, s)
+                  if e < 0:
+                      break
+                  blocks.append(all_text[s + len(start) : e].strip())
+                  cursor = e + len(end)
+
+          def parse_block(block: str) -> dict[str, str]:
+              result: dict[str, str] = {}
+              for line in block.splitlines():
+                  line = line.strip()
+                  if not line or ":" not in line:
+                      continue
+                  key, value = line.split(":", 1)
+                  result[key.strip().upper()] = value.strip().upper()
+              return result
+
+          def marker_matches_head(marker_sha: str, full_sha: str) -> bool:
+              marker = re.sub(r"[^0-9A-F]", "", marker_sha.upper())
+              full = re.sub(r"[^0-9A-F]", "", full_sha.upper())
+              if len(full) != 40:
+                  return False
+              if len(marker) == 40:
+                  return marker == full
+              if len(marker) == 7:
+                  return marker == full[:7]
+              return False
+
+          def first_value(data: dict[str, str], *keys: str) -> str:
+              for key in keys:
+                  value = (data.get(key) or "").strip().upper()
+                  if value:
+                      return value
+              return ""
+
+          matched: list[dict[str, str]] = []
+          for raw in blocks:
+              data = parse_block(raw)
+              sha = (data.get("EMMA_HEAD_SHA") or "").upper()
+              if not sha:
+                  continue
+              if marker_matches_head(sha, head_sha_u):
+                  matched.append(data)
+
+          if not matched:
+              err(
+                  "R2 requires LLM gate marker for current Head-SHA, but none was found in PR comments. "
+                  "Post an LLM outcome comment using the template in docs/operations/review_merge_automation.md "
+                  "(legacy EMMA_CLAUDE_MARKER_* and target EMMA_REVIEW_MARKER_* blocks are both accepted).",
+              )
+              sys.exit(1)
+
+          waiting_statuses = {"WAITING_FOR_CLAUDE", "WAITING_FOR_LLM_REVIEW", "WAITING_FOR_LLM"}
+          outcome_markers: list[tuple[str, str, str, dict[str, str]]] = []
+          waiting_markers: list[dict[str, str]] = []
+          invalid_markers: list[tuple[str, str, dict[str, str]]] = []
+
+          for data in matched:
+              status = first_value(data, "EMMA_LLM_STATUS", "EMMA_CLAUDE_STATUS") or "UNKNOWN"
+              outcome = first_value(data, "EMMA_LLM_OUTCOME", "EMMA_CLAUDE_OUTCOME") or "UNKNOWN"
+              passed = first_value(data, "EMMA_LLM_PASS", "EMMA_CLAUDE_PASS") or "FALSE"
+              if status == "OUTCOME_RECORDED":
+                  outcome_markers.append((outcome, passed, first_value(data, "EMMA_LLM_BLOCKED", "EMMA_CLAUDE_BLOCKED"), data))
+              elif status in waiting_statuses:
+                  waiting_markers.append(data)
+              else:
+                  invalid_markers.append((status, outcome, data))
+
+          blocking_outcomes = [item for item in outcome_markers if item[0] in ("FAIL", "GATE_REQUIRED")]
+          if blocking_outcomes:
+              outcome = blocking_outcomes[-1][0]
+              err(f"LLM outcome is {outcome} for current Head-SHA — merge blocked.")
+              sys.exit(1)
+
+          pass_outcomes = [item for item in outcome_markers if item[0] == "PASS" and item[1] == "TRUE"]
+          if pass_outcomes:
+              print("LLM gate: PASS marker found for current Head-SHA.")
+              sys.exit(0)
+
+          if outcome_markers:
+              outcome, passed, _blocked, _data = outcome_markers[-1]
+              err(f"LLM marker outcome recorded but not PASS (outcome={outcome}, pass={passed}).")
+              sys.exit(1)
+
+          if waiting_markers:
+              err("R2 PR is WAITING_FOR_LLM_REVIEW — merge blocked until LLM outcome is recorded.")
+              sys.exit(1)
+
+          status = invalid_markers[-1][0] if invalid_markers else "UNKNOWN"
+          err(
+              f"Invalid LLM gate marker status for R2: {status}. "
+              "Expected WAITING_FOR_LLM_REVIEW, WAITING_FOR_CLAUDE, or OUTCOME_RECORDED."
+          )
+          sys.exit(1)
+          PY

@@ -1,0 +1,310 @@
+name: Claude trigger (stage 1)
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: claude-trigger-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  checks: read
+
+jobs:
+  post-claude-prompt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post Claude review prompt for R2 PRs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          import urllib.request
+          from typing import Any
+          
+          def info(msg: str) -> None:
+              print(f"Claude trigger: {msg}")
+          
+          def err(msg: str) -> None:
+              print(f"::error::Claude trigger: {msg}")
+          
+          token = (os.environ.get("GITHUB_TOKEN") or "").strip()
+          if not token:
+              err("GITHUB_TOKEN missing.")
+              sys.exit(1)
+          
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
+              event = json.load(f)
+          
+          pr = event.get("pull_request") or {}
+          body = str(pr.get("body") or "")
+          pr_number = int(pr.get("number") or 0)
+          head_sha = str(((pr.get("head") or {}).get("sha") or "")).strip()
+          pr_url = str(pr.get("html_url") or pr.get("url") or "")
+          repo_full = str(((event.get("repository") or {}).get("full_name") or "")).strip()
+          is_draft = pr.get("draft") is True
+
+          if is_draft:
+              info("PR is draft — skip.")
+              sys.exit(0)
+          
+          if not pr_number or not head_sha or not repo_full:
+              err("Missing PR metadata (number/head sha/repo).")
+              sys.exit(1)
+          
+          def section_by_header(text: str, name: str) -> str:
+              pat = re.compile(rf"^##\s+{re.escape(name)}\s*$", re.I | re.M)
+              m = pat.search(text)
+              if not m:
+                  return ""
+              rest = text[m.end() :]
+              m2 = re.search(r"^##\s+\S", rest, re.M)
+              if m2:
+                  return rest[: m2.start()]
+              return rest
+          
+          sec_risk = section_by_header(body, "Risikoklasse")
+          if not sec_risk.strip():
+              sec_risk = body
+          m = re.search(r"\*\*R([0-5])\*\*", sec_risk)
+          risk = f"R{m.group(1)}" if m else "?"
+          if risk != "R2":
+              info(f"risk={risk} (not R2) — skip.")
+              sys.exit(0)
+          
+          linear_id_m = re.search(r"\bEMM-\d+\b", body, re.I)
+          linear_id = linear_id_m.group(0).upper() if linear_id_m else "EMM-???"
+          
+          def gh_get_json(url: str) -> Any:
+              req = urllib.request.Request(
+                  url,
+                  headers={
+                      "Authorization": f"Bearer {token}",
+                      "Accept": "application/vnd.github+json",
+                      "User-Agent": "emma-claude-trigger",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  data = resp.read().decode("utf-8", errors="replace")
+              return json.loads(data)
+
+          def gh_get_json_soft(url: str) -> Any:
+              try:
+                  return gh_get_json(url)
+              except Exception as exc:
+                  info(f"GitHub API read failed (soft): {exc}")
+                  return {}
+          
+          def gh_post_json(url: str, payload: dict[str, Any]) -> Any:
+              data = json.dumps(payload).encode("utf-8")
+              req = urllib.request.Request(
+                  url,
+                  data=data,
+                  method="POST",
+                  headers={
+                      "Authorization": f"Bearer {token}",
+                      "Accept": "application/vnd.github+json",
+                      "Content-Type": "application/json",
+                      "User-Agent": "emma-claude-trigger",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  text = resp.read().decode("utf-8", errors="replace")
+              return json.loads(text) if text.strip() else {}
+          
+          def iter_issue_comment_bodies(url: str) -> list[str]:
+              bodies: list[str] = []
+              page = 1
+              while page <= 10:
+                  payload = gh_get_json_soft(f"{url}?per_page=100&page={page}")
+                  if not isinstance(payload, list) or not payload:
+                      break
+                  for item in payload:
+                      if isinstance(item, dict):
+                          bodies.append(str(item.get("body") or ""))
+                  page += 1
+              return bodies
+          
+          api_base = f"https://api.github.com/repos/{repo_full}"
+          issue_comments = iter_issue_comment_bodies(f"{api_base}/issues/{pr_number}/comments")
+          all_text = "\n\n".join(issue_comments)
+          
+          start = "<!-- EMMA_CLAUDE_MARKER_START -->"
+          end = "<!-- EMMA_CLAUDE_MARKER_END -->"
+          
+          def parse_blocks(text: str) -> list[dict[str, str]]:
+              blocks: list[dict[str, str]] = []
+              cursor = 0
+              while True:
+                  s = text.find(start, cursor)
+                  if s < 0:
+                      break
+                  e = text.find(end, s)
+                  if e < 0:
+                      break
+                  raw = text[s + len(start) : e].strip()
+                  data: dict[str, str] = {}
+                  for line in raw.splitlines():
+                      line = line.strip()
+                      if not line or ":" not in line:
+                          continue
+                      key, value = line.split(":", 1)
+                      data[key.strip().upper()] = value.strip().upper()
+                  if data:
+                      blocks.append(data)
+                  cursor = e + len(end)
+              return blocks
+          
+          head_u = head_sha.upper()
+          for data in parse_blocks(all_text):
+              sha = (data.get("EMMA_HEAD_SHA") or "").upper()
+              if not sha:
+                  continue
+              if head_u.startswith(sha) or sha.startswith(head_u[:7]):
+                  info("Claude marker already present for current head sha — skip.")
+                  sys.exit(0)
+          
+          checks = gh_get_json_soft(f"{api_base}/commits/{head_sha}/check-runs?per_page=100")
+          items = checks.get("check_runs") if isinstance(checks, dict) else None
+          check_lines: list[str] = []
+          if isinstance(items, list):
+              for check in items:
+                  if not isinstance(check, dict):
+                      continue
+                  name = str(check.get("name") or "")
+                  status = str(check.get("status") or "").upper()
+                  conclusion = str(check.get("conclusion") or "").upper()
+                  url = str(check.get("html_url") or "")
+                  state = conclusion if conclusion else status if status else "UNKNOWN"
+                  if name:
+                      suffix = f" ({url})" if url else ""
+                      check_lines.append(f"* {name}: {state}{suffix}")
+          if not check_lines:
+              check_lines = ["* (keine)"]
+          
+          prompt_lines: list[str] = [
+              f"## CLAUDE REVIEW PROMPT — {linear_id}",
+              "",
+              f"PR: {pr_url}",
+              f"Linear: {linear_id}",
+              f"Head-SHA: {head_sha[:7]}",
+              "Risikoklasse: R2",
+              "",
+              "Scope:",
+              "* (aus PR-Body / REVIEW REQUEST übernehmen)",
+              "",
+              "Nicht-Scope:",
+              "* (aus PR-Body / REVIEW REQUEST übernehmen)",
+              "",
+              "Check-Status:",
+          ]
+          prompt_lines.extend(check_lines)
+          prompt_lines.extend(
+              [
+                  "",
+                  "Review-Fokus:",
+                  "* Architektur- und Governance-Konsistenz",
+                  "* Test-/Check-Abdeckung",
+                  "* Regressionen und offene Blocker",
+                  "* Einhaltung der Merge-Gates fuer die deklarierte Risikoklasse",
+                  "",
+                  "Erwartetes Ergebnisformat:",
+                  "* Outcome: PASS / REQUEST_CHANGES / BLOCKED",
+                  "* Risikoklasse (deklariert): R2",
+                  "* Risikoklasse (Review): R0-R5",
+                  "* Merge-Empfehlung: Merge / Nicht mergen / Hochstufen",
+                  "* Befunde: Blocker getrennt von Hinweisen",
+                  "* Evidenz: gepruefte Dateien, Checks, Referenzen",
+                  "",
+                  "### Claude-Review (angefordert)",
+                  "",
+                  "Status: WAITING_FOR_CLAUDE",
+                  "",
+                  "<!-- EMMA_CLAUDE_MARKER_START -->",
+                  f"EMMA_LINEAR_ID: {linear_id}",
+                  f"EMMA_HEAD_SHA: {head_sha[:7]}",
+                  "EMMA_CLAUDE_STATUS: WAITING_FOR_CLAUDE",
+                  "<!-- EMMA_CLAUDE_MARKER_END -->",
+              ]
+          )
+          prompt = "\n".join(prompt_lines)
+          
+          gh_post_json(
+              f"{api_base}/issues/{pr_number}/comments",
+              {"body": prompt},
+          )
+          info("Posted Claude review prompt comment.")
+          
+          linear_key = (os.environ.get("LINEAR_API_KEY") or "").strip()
+          if not linear_key or linear_id == "EMM-???":
+              info("Linear comment skipped (missing LINEAR_API_KEY or Linear ID not found in PR body).")
+              sys.exit(0)
+          
+          def linear_graphql(query: str, variables: dict[str, Any] | None = None) -> Any:
+              payload: dict[str, Any] = {"query": query}
+              if variables is not None:
+                  payload["variables"] = variables
+              data = json.dumps(payload).encode("utf-8")
+              req = urllib.request.Request(
+                  "https://api.example.invalid/graphql",
+                  data=data,
+                  method="POST",
+                  headers={
+                      "Authorization": linear_key,
+                      "Content-Type": "application/json",
+                      "User-Agent": "emma-claude-trigger",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  text = resp.read().decode("utf-8", errors="replace")
+              return json.loads(text)
+          
+          issue_q = """
+          query Issue($id: String!) {
+            issue(id: $id) { id identifier title }
+          }
+          """
+          issue_resp = linear_graphql(issue_q, {"id": linear_id})
+          issue = ((issue_resp.get("data") or {}).get("issue") or {}) if isinstance(issue_resp, dict) else {}
+          issue_uuid = str(issue.get("id") or "")
+          if not issue_uuid:
+              info("Linear issue lookup failed; skip Linear comment.")
+              sys.exit(0)
+          
+          body_md = "\n".join(
+              [
+                  f"## WAITING_FOR_CLAUDE — {linear_id}",
+                  "",
+                  "Agent: GitHub Actions (claude_trigger.yml)",
+                  "Risikoklasse: R2",
+                  f"PR: {pr_url}",
+                  f"Commit-SHA: {head_sha[:7]}",
+                  "",
+                  "Claude-Request:",
+                  "- Zielhandlung: Review",
+                  "- Fokus: Governance-/Gate-Konsistenz, Tests/Checks, Regressionen",
+                  "",
+                  "Status: WAITING_FOR_CLAUDE",
+              ]
+          )
+          
+          comment_m = """
+          mutation CommentCreate($issueId: String!, $body: String!) {
+            commentCreate(input: { issueId: $issueId, body: $body }) {
+              success
+            }
+          }
+          """
+          linear_graphql(comment_m, {"issueId": issue_uuid, "body": body_md})
+          info("Posted Linear WAITING_FOR_CLAUDE comment.")
+          PY

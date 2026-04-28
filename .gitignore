@@ -1,0 +1,9 @@
+# Local OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.log
+
+# If someone unpacks tools here by mistake
+.env
+.env.*

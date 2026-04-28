@@ -1,0 +1,13 @@
+name: fake_planning
+description: Deterministic fake planning port for MVP simulation.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  domain_planning: any
+
+dev_dependencies:
+  test: any

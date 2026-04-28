@@ -1,0 +1,15 @@
+name: fake_maps
+description: Fake DirectionsPort implementation backed by an inline MDV
+  travel-time table. MVP default under ADR-03 / ADR-05.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  domain_journey: any
+  emma_contracts: any
+
+dev_dependencies:
+  test: any

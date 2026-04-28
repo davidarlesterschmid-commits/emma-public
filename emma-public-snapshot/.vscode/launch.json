@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "emma app (dev)",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/apps/emma_app",
+      "program": "lib/main_dev.dart",
+      "flutterMode": "debug",
+      "toolArgs": [
+        "--dart-define", "APP_ENV=dev",
+        "--dart-define", "API_BASE_URL=http://localhost:8080"
+      ],
+      "preLaunchTask": "emma: bootstrap"
+    },
+    {
+      "name": "bff_mobile (local)",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/services/bff_mobile",
+      "program": "bin/server.dart",
+      "env": {
+        "APP_ENV": "dev",
+        "PORT": "8080"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "full stack (app + bff)",
+      "configurations": [
+        "emma app (dev)",
+        "bff_mobile (local)"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+name: domain_reporting
+description: Reporting domain — reporting events emitted by journey and partner modules for analytics and clearing.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies: {}
+
+dev_dependencies:
+  test: any

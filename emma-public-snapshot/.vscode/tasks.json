@@ -1,0 +1,112 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "emma: bootstrap",
+      "type": "shell",
+      "command": "dart",
+      "args": ["pub", "get"],
+      "group": "build"
+    },
+    {
+      "label": "emma: analyze",
+      "type": "shell",
+      "command": "dart",
+      "args": ["run", "melos", "run", "analyze"],
+      "group": "test"
+    },
+    {
+      "label": "emma: format",
+      "type": "shell",
+      "command": "dart",
+      "args": ["run", "melos", "run", "format"],
+      "group": "build"
+    },
+    {
+      "label": "emma: test flutter",
+      "type": "shell",
+      "command": "dart",
+      "args": ["run", "melos", "run", "test:flutter"],
+      "group": "test"
+    },
+    {
+      "label": "emma: agent start",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "tools/scripts/agent_workflow.ps1",
+        "start",
+        "${input:emmaIssue}",
+        "-Risk",
+        "${input:emmaRisk}"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "emma: agent review request",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "tools/scripts/agent_workflow.ps1",
+        "review-request",
+        "${input:emmaIssue}",
+        "-Risk",
+        "${input:emmaRisk}",
+        "-PrLink",
+        "${input:emmaPrLink}"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "emma: agent gate check",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "tools/scripts/agent_workflow.ps1",
+        "gate",
+        "${input:emmaIssue}",
+        "-Risk",
+        "${input:emmaRisk}",
+        "-PrLink",
+        "${input:emmaPrLink}"
+      ],
+      "group": "test",
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "emmaIssue",
+      "type": "promptString",
+      "description": "Linear issue ID",
+      "default": "EMM-188"
+    },
+    {
+      "id": "emmaRisk",
+      "type": "pickString",
+      "description": "Risk class",
+      "options": ["R1", "R0", "R2", "R3", "R4", "R5"],
+      "default": "R1"
+    },
+    {
+      "id": "emmaPrLink",
+      "type": "promptString",
+      "description": "Pull request URL",
+      "default": "<PR-Link>"
+    }
+  ]
+}

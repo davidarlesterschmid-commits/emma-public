@@ -1,0 +1,13 @@
+name: fake_identity
+description: In-memory identity demo users and catalog for USE_FAKES (Task #36).
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  domain_identity: any
+
+dev_dependencies:
+  test: any

@@ -1,0 +1,119 @@
+name: Auto-ready draft PRs
+
+on:
+  workflow_run:
+    workflows: ["CI", "PR governance"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to evaluate and possibly mark ready"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  auto-ready:
+    # Only react to successful workflow runs; workflow_dispatch is manual.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark draft PR ready when checks are green
+        uses: actions/github-script@v7
+        with:
+          pr_number: ${{ inputs.pr_number || '' }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Required checks for "ready" decision.
+            //
+            // Note: For draft PRs, "r3-gate" is often skipped / not present yet because it runs only
+            // once the PR is ready (non-draft). We therefore accept r3-gate == success OR skipped OR absent.
+            const MUST_BE_SUCCESS = new Set(["analyze-and-test", "pr-body"]);
+            const OPTIONAL_ON_DRAFT = new Set(["r3-gate"]);
+
+            function isGreenCheckRun(run) {
+              // Check runs can have status != completed (queued/in_progress) and conclusion null.
+              if (run.status !== "completed") return false;
+              return run.conclusion === "success" || run.conclusion === "skipped";
+            }
+
+            async function listCheckRunsForSha(sha) {
+              const res = await github.rest.checks.listForRef({
+                owner,
+                repo,
+                ref: sha,
+                per_page: 100,
+              });
+              return res.data.check_runs || [];
+            }
+
+            async function maybeReadyPR(pull_number) {
+              const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
+              if (!pr.draft) {
+                core.info(`PR #${pull_number} is not draft. Nothing to do.`);
+                return;
+              }
+
+              const sha = pr.head.sha;
+              const checkRuns = await listCheckRunsForSha(sha);
+              const byName = new Map(checkRuns.map((r) => [r.name, r]));
+
+              for (const name of MUST_BE_SUCCESS) {
+                const run = byName.get(name);
+                if (!run) {
+                  core.info(`PR #${pull_number}: missing required check '${name}'.`);
+                  return;
+                }
+                if (!isGreenCheckRun(run) || run.conclusion !== "success") {
+                  core.info(`PR #${pull_number}: check '${name}' not green (status=${run.status}, conclusion=${run.conclusion}).`);
+                  return;
+                }
+              }
+
+              for (const name of OPTIONAL_ON_DRAFT) {
+                const run = byName.get(name);
+                if (!run) {
+                  core.info(`PR #${pull_number}: '${name}' not present yet (ok on draft).`);
+                  continue;
+                }
+                if (!isGreenCheckRun(run)) {
+                  core.info(`PR #${pull_number}: optional check '${name}' not green (status=${run.status}, conclusion=${run.conclusion}).`);
+                  return;
+                }
+              }
+
+              core.info(`PR #${pull_number}: checks green for draft -> mark ready_for_review.`);
+              await github.rest.pulls.update({ owner, repo, pull_number, draft: false });
+            }
+
+            let prNumbers = [];
+
+            if (context.eventName === "workflow_dispatch") {
+              const raw = String(core.getInput("pr_number")).trim();
+              const prNum = Number(raw);
+              if (!Number.isInteger(prNum) || prNum <= 0) {
+                throw new Error(`Invalid pr_number: '${raw}'`);
+              }
+              prNumbers = [prNum];
+            } else {
+              const runId = context.payload.workflow_run.id;
+              const { data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: runId });
+              const prs = run.pull_requests || [];
+              prNumbers = prs.map((p) => p.number);
+            }
+
+            if (prNumbers.length === 0) {
+              core.info("No PRs associated with this event.");
+              return;
+            }
+
+            for (const n of prNumbers) {
+              await maybeReadyPR(n);
+            }

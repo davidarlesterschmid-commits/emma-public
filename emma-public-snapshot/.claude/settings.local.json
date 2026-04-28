@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(melos run *)",
+      "Bash(melos bootstrap *)"
+    ]
+  }
+}

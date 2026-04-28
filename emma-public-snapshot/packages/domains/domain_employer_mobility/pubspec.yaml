@@ -1,0 +1,22 @@
+name: domain_employer_mobility
+description: Employer-mobility domain — benefits, job tickets, profile mode, budget contract. Flutter-free.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  # Workspace-interne Packages
+  domain_identity: any
+  domain_rules: any
+  domain_wallet: any
+  emma_contracts: any
+  # Externe Dependencies
+  freezed_annotation: ^3.1.0
+
+dev_dependencies:
+  build_runner: any
+  freezed: any
+  json_serializable: any
+  test: any

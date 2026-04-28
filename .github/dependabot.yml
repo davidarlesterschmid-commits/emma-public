@@ -1,0 +1,14 @@
+# Dependabot (GitHub Actions) — pre-labeled for R0 + public-safe so EMM-227 automerge can apply
+# (remove or adjust labels if a PR should stay manual).
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "risk/R0"
+      - "public-safe"
+    open-pull-requests-limit: 3

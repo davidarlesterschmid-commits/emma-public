@@ -1,0 +1,13 @@
+docs: create agent_memory.md with architecture guidelines
+
+EMM-88
+
+## Risikoklasse
+- **R0**
+
+M01
+M01-F01
+
+Nicht zutreffend: initiales Onboarding und agent setup.
+
+Dies ist der initiale Onboarding-Lauf. Ich habe die Architektur aus Linear (TARGET_ARCHITECTURE.md) und der Repo-Dokumentation analysiert und `agent_memory.md` mit den Core-Technologien, dem State-Management und den Styling-Konventionen erstellt, ohne andere Dateien anzufassen. Warte nun auf den Input für das erste Feature.

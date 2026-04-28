@@ -1,0 +1,16 @@
+name: runner test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: [self-hosted, Windows, X64]
+
+    steps:
+      - name: Check environment
+        shell: pwsh
+        run: |
+          Write-Output "Runner funktioniert"
+          hostname
+          Get-Location

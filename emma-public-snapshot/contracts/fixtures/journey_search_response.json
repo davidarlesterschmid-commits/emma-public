@@ -1,0 +1,10 @@
+{
+  "options": [
+    {
+      "id": "journey-1",
+      "label": "Stub route from A to B",
+      "originId": "A",
+      "destinationId": "B"
+    }
+  ]
+}

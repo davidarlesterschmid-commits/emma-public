@@ -1,0 +1,28 @@
+name: feature_journey
+description: Journey search feature — UI screens and routing integration.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  emma_core: any
+  emma_ui_kit: any
+  emma_contracts: any
+  domain_journey: any
+  domain_ticketing: any
+  domain_customer_service: any
+  domain_reporting: any
+  feature_ticketing: any
+  flutter_riverpod: ^3.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: any
+
+flutter:
+  uses-material-design: true

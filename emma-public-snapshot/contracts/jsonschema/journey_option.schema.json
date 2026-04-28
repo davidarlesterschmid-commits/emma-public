@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JourneyOption",
+  "type": "object",
+  "required": ["id", "label", "originId", "destinationId"],
+  "properties": {
+    "id": { "type": "string" },
+    "label": { "type": "string" },
+    "originId": { "type": "string" },
+    "destinationId": { "type": "string" }
+  }
+}

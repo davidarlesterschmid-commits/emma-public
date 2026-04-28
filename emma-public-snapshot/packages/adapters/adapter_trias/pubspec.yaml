@@ -1,0 +1,19 @@
+name: adapter_trias
+description: TRIAS routing adapter — maps external TRIAS/VDV API responses to domain_journey entities.
+publish_to: none
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  domain_journey: any
+  emma_contracts: any
+  emma_core: any
+  http: ^1.5.0
+
+dev_dependencies:
+  test: ^1.25.0
+  lints: any
+  emma_testkit: any

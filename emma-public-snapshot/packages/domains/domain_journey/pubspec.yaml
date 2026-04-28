@@ -1,0 +1,15 @@
+name: domain_journey
+description: Journey domain — routing intents, journey entities, summary service.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  emma_core: any
+  domain_rules: any
+  domain_wallet: any
+
+dev_dependencies:
+  test: any

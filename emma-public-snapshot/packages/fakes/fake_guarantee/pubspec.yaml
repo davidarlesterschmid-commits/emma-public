@@ -1,0 +1,15 @@
+name: fake_guarantee
+description: M07 — In-Memory Fake (Realtime, MobilityGuarantee, Notification).
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  domain_guarantee: any
+  domain_mobility_guarantee: any
+  emma_contracts: any
+
+dev_dependencies:
+  test: any

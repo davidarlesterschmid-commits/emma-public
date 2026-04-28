@@ -1,0 +1,53 @@
+name: emma_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+
+workspace:
+  - apps/*
+  - packages/*/*
+  - services/*
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: any
+  melos: any
+
+# Melos 7.x reads its config from here (pubspec.yaml), not melos.yaml.
+# Dart workspace above enumerates the packages; melos consumes that list.
+melos:
+  name: emma
+  scripts:
+    # Root `workspace:` glob paths are not real directories; `dart analyze .` at repo
+    # root reports spurious `path_does_not_exist` on those lines. Use `melos exec`
+    # to analyze every package the workspace actually resolves to.
+    analyze:
+      run: melos exec --concurrency=1 -- "dart analyze . --fatal-infos --fatal-warnings"
+      description: Analyze all workspace packages (via melos exec)
+
+    format:
+      run: dart format .
+      description: Format the entire workspace
+
+    test:flutter:
+      exec: flutter test
+      description: Run Flutter unit and widget tests in Flutter packages
+      packageFilters:
+        dirExists: test
+        flutter: true
+
+    test:integration:
+      exec: flutter test integration_test
+      description: Run Flutter integration tests if present
+      packageFilters:
+        dirExists: integration_test
+        flutter: true
+
+    test:unit:
+      exec: dart test
+      description: Run pure Dart unit tests in Dart-only packages
+      packageFilters:
+        dirExists: test
+        flutter: false

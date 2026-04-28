@@ -1,0 +1,21 @@
+# EMM-225 public snapshot — explicit file whitelist (paths relative to repo root)
+#
+# Only these files were copied from the private emma monorepo for this snapshot.
+#
+LICENSE
+README.md
+SECURITY.md
+.gitignore
+WHITELIST.txt
+docs/audits/public_readiness/EMM-222_public_readiness_audit.md
+docs/audits/public_readiness/EMM-222_findings.json
+docs/audits/dependency_licenses/EMM-224_dependency_license_audit.md
+docs/audits/dependency_licenses/EMM-224_findings.json
+SNAPSHOT_CHECKS.md
+.github/workflows/ci.yml
+.github/workflows/automerge-r0-r1.yml
+.github/dependabot.yml
+.github/PULL_REQUEST_TEMPLATE.md
+.github/CODEOWNERS
+docs/GITHUB_AUTOMERGE_POLICY.md
+docs/LABELS.md

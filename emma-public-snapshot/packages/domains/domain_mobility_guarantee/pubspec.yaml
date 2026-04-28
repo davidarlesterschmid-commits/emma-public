@@ -1,0 +1,14 @@
+name: domain_mobility_guarantee
+description: M07 Mobilitaetsgarantie — Trigger-Engine, Regelkatalog.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  emma_contracts: any
+  meta: any
+
+dev_dependencies:
+  test: any

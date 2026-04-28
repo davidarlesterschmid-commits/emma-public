@@ -1,0 +1,16 @@
+name: fake_customer_account
+description: >
+  In-memory / JSON-backed fake repositories for customer-account demo data,
+  including deterministic invoice fixtures (MVP, ADR-03 / ADR-05).
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  domain_identity: any
+  emma_contracts: any
+
+dev_dependencies:
+  test: any

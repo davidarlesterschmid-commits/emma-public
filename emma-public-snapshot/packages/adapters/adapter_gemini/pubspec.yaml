@@ -1,0 +1,17 @@
+name: adapter_gemini
+description: Live ChatPort implementation backed by Google Gemini
+  (google_generative_ai). Aktiviert nur wenn USE_FAKES=false.
+publish_to: none
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  emma_contracts: any
+  google_generative_ai: ^0.4.6
+
+dev_dependencies:
+  test: ^1.25.0
+  lints: any

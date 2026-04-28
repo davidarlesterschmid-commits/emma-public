@@ -1,0 +1,65 @@
+---
+description: Emma-Monorepo — verbindliche Arbeits- und Architekturregeln (Kanon AGENTS.md).
+alwaysApply: true
+---
+
+# emma — Agentenregeln (Kurz)
+
+Vollstaendiger Kanon: `AGENTS.md` (Repo-Root), technische Kurzform: `CLAUDE.md`, Doku-Index: `docs/README.md`.
+
+## Quellen der Wahrheit
+
+- **Linear:** Projekt, Scope, Akzeptanz.
+- **GitHub:** Code, Branches, PRs, Merge-Historie.
+- **ChatGPT:** strategische Steuerung (kein Ersatz fuer dokumentierte ADRs/Architektur).
+
+## Pflicht vor Umsetzung
+
+- Jede Aenderung ist an ein **Linear-Issue** gebunden; **keine Arbeit ohne Ticket**.
+- **Neue Linear-Issues (API/MCP):** Struktur und Stopp-Regeln (max. **2** fehlgeschlagene Creates, Zwei-Schritt: kurzes Issue + Kommentar mit Details): `docs/planning/LINEAR_ISSUE_TEMPLATE.md`.
+- **Branch** enthaelt die Linear-ID (z. B. `EMM-123`), bevorzugt Schemata: `codex/EMM-…`, `cursor/EMM-…`, `docs/EMM-…`.
+- **PR-Titel oder PR-Body** enthaelt die **Linear-ID**.
+- **Linear-IDs** nicht in Paketnamen, Imports, Klassen, Domainmodellen oder Runtime-Logik.
+- **Risikoklasse** R0–R5 pro Aenderung kennen; Modulgrenzen nur mit **R3/R4-Gate** aendern.
+- `Identity`, `Payment`, `Wallet`, `Rules`, `Booking`, `Guarantee`, `Partnerhub`, **Migrationen** nur mit klarer **Risikoklassifikation** anfassen.
+- Keine parallele Architektur; nur den vereinbarten **Scope** des Issues aendern; keine wahllosen Loeschungen, Verschiebungen oder Massenformatierungen ohne Issue-Freigabe.
+
+## Monorepo-Struktur (Kern)
+
+- `apps/` importiert Pakete; **Packages importieren niemals** `apps/`.
+- **UI / Domain / Data** trennen; **keine Geschaeftslogik in Widgets**.
+- **Ports** in `package:emma_contracts`; **Repositories** in `domain_*`; **Implementierungen** in `adapters/` oder `fakes/`.
+- **Riverpod**-Instanzen im Zielbild nur in der App-Shell (`apps/emma_app/.../presentation/providers/`); Ausnahmen bei einzelnen `feature_*` sind dokumentierte Abweichung.
+- **MVP-Default:** kein kostenpflichtiger Dritt-API-Zwang; Fakes / Open-Data; `--dart-define=USE_FAKES=true` (siehe ADR-03, ADR-05–07).
+
+## Verboten
+
+- `package:emma_app/...` in `packages/**`.
+- **Unbegrenzte Barrels:** kein `export` ohne `show`.
+- Kostenpflichtige APIs als MVP-Pflicht oder im MVP-Default-Build.
+- Tarif-Logik im UI-Layer.
+
+## Review, Merge, Betrieb
+
+- PR-Hygiene (keine Zombie-Drafts, ein PR pro Issue, Branch vor Ready gegen `main`): `docs/operations/pr_hygiene.md`. Branch-Ergebnis (Merge / Cherry-pick / Schliessen, Wann-Regeln): `docs/operations/branch_outcome_policy.md`.
+- Vollstaendige Risikoklassen und Gates: `docs/operations/automerge_policy.md`.
+- Agentenfluss: `docs/operations/agent_operating_model.md`.
+- R0–R2 Review-/Merge-Details: `docs/operations/review_merge_automation.md`.
+- Test-/Check-Breite (wann `melos` voll vs. reduziert): `docs/operations/test_scope_policy.md` (im PR begruenden, wenn reduziert).
+- **Keine** neuen **Secrets** im Repo; **keine** CI-Struktur aendern, wenn das Ticket es nicht vorsieht.
+
+## Git, Push, PR, Merge (verbindlich)
+
+- **Staging:** Niemals `git add .` — nur explizit benoetigte Pfade stagen, damit kein fremder oder ausserhalb des Tickets liegender Bestand mitschleicht.
+- **Vor Push:** `git diff --cached --name-status` pruefen; nur committen, was zum Ticket und zur Risikoklasse gehoert.
+- **Push:** Nur auf **Ticket-Branches** (mit Linear-ID), **niemals** direkt auf `main` (oder den geschuetzten Default) pushen.
+- **Vor Merge:** **Pull Request ist Pflicht** — kein Fast-Forward-Merge lokal in `main` statt PR.
+- **Merge-Strategie am Remote:** **nur Squash** (kein Rebase-Merge, kein Merge-Commit, ausser explizit anders in GitHub-Repo-Einstellungen vorgegeben und im Ticket begruendet).
+- **R0 / R1:** Vor Merge muss im PR nachvollziehbar sein: **entweder** Self-Check **oder** ein **Claude-Review-Artefakt** (z. B. Outcome, Kommentar nach Template) — so dass Gates aus `review_merge_automation` einhaltbar bleiben.
+- **R2:** **Claude-Review Outcome = PASS** ist **Pflicht** vor Merge; bei `FAIL` oder `GATE_REQUIRED`: nicht mergen bzw. Hochstufung laut Policy.
+- **R3 / R4 / R5:** **Cursor (Agent) darf nicht mergen** — Merge nur Maintenance/Maintainer-Prozess; Policy und Gates in `automerge_policy.md` befolgen.
+- **Nach Merge** (fuer jede in Linear gefuehrte Umsetzung): Im **zugehoerigen Linear-Issue** ein Kommentar mit mindestens: **Link zum PR**, **Merge-Commit-SHA** (bzw. Squash-Commit auf `main`), **Risikoklasse**, **Review-Outcome** (Self / Claude, PASS o. a.), **Kurzbeschreibung des Scopes**, **empfohlener naechster Schritt** — konsistent mit dem Linear-Template in `docs/operations/review_merge_automation.md` (Passe Felder an, wo das Issue mehr braucht).
+
+## Meldung nach Arbeit
+
+- Linear-Issue, Risikoklasse, geaenderte Dateien, ausgefuehrte Tests oder Begruendung bei Auslassung, Blocker, naechster Schritt (siehe `docs/operations/agent_operating_model.md`).

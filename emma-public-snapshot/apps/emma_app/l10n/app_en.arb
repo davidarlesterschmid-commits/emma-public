@@ -1,0 +1,17 @@
+{
+  "@@locale": "en",
+  "appTitle": "emma",
+  "settingsScreenTitle": "Settings",
+  "consentScreenAppBar": "Privacy & consents",
+  "settingsEmptyHint": "No further settings are stored yet. You can adjust consents below.",
+  "openConsentAction": "Open consents",
+  "consentToggleAnalytics": "Usage analytics (stub)",
+  "consentToggleMarketing": "Personalization / marketing (stub)",
+  "errorRetry": "Try again",
+  "errorUnknown": "Unknown error",
+  "profileListSettings": "Settings",
+  "semanticsSettingsLoading": "Settings are loading",
+  "semanticsConsentLoading": "Consents are loading",
+  "semanticsError": "Error",
+  "semanticsToggles": "Consents, toggles"
+}

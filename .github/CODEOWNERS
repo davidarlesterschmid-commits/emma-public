@@ -1,0 +1,13 @@
+# CODEOWNERS — EMM-227
+#
+# GitHub only enforces lines with a valid @user or @org/team.
+# 1) Create teams or pick users with write access.
+# 2) Uncomment and adjust the lines below, then turn on
+#    Settings → Branches → Rule for `main` → "Require review from Code Owners" (optional, for stricter review on these paths).
+#
+# * @CHANGE_ME_ORG_OR_USER
+# /LICENSE @CHANGE_ME_ORG_OR_USER
+# /.github/ @CHANGE_ME_ORG_OR_USER
+# /docs/ @CHANGE_ME_ORG_OR_USER
+#
+# Until uncommented, no code-owner rules are active from this file.

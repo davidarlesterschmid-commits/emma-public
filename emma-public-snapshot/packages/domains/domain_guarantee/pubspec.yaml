@@ -1,0 +1,13 @@
+name: domain_guarantee
+description: Mobility guarantee domain skeleton for simulated eligibility and fallback offers.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  emma_contracts: any
+
+dev_dependencies:
+  test: any

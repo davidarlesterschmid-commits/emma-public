@@ -1,0 +1,119 @@
+# Restricted automerge — R0 / R1 only, public-safe, no no-automerge, no blocked paths.
+# EMM-227 — emma-public only (not the private emma monorepo).
+
+name: automerge (R0 or R1 only)
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - labeled
+      - unlabeled
+      - ready_for_review
+
+concurrency:
+  group: automerge-public-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  evaluate:
+    if: >
+      github.event.pull_request.draft == false
+      && github.event.pull_request.base.ref == 'main'
+      && github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate labels and paths; merge or skip
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const core = require('@actions/core');
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const prNumber = pr.number;
+
+            const labels = new Set((pr.labels || []).map((l) => l.name));
+            const has = (n) => labels.has(n);
+
+            const RISK = { r0: 'risk/R0', r1: 'risk/R1', r2: 'risk/R2', r3: 'risk/R3' };
+            const PUBLIC = 'public-safe';
+            const BLOCK = 'no-automerge';
+
+            if (has(BLOCK)) {
+              await core.notice('no-automerge: skipping automerge');
+              return;
+            }
+            if (!has(PUBLIC)) {
+              await core.notice('public-safe label missing: skipping automerge (sync PRs and others stay manual).');
+              return;
+            }
+            if (has(RISK.r2) || has(RISK.r3)) {
+              await core.notice('risk/R2 or risk/R3 present: automerge disabled for this PR (needs human review).');
+              return;
+            }
+            if (!(has(RISK.r0) || has(RISK.r1))) {
+              await core.notice('neither risk/R0 nor risk/R1: automerge not applied.');
+              return;
+            }
+
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner, repo, pull_number: prNumber, per_page: 100
+            });
+            if (files.length > 100) {
+              await core.notice('>100 files in PR — automerge skipped (manual merge only).');
+              return;
+            }
+
+            const isDependabot =
+              context.actor === 'dependabot[bot]' || context.actor === 'dependabot-preview[bot]';
+
+            const blockPatterns = (path) => {
+              const f = path.replace(/\\/g, '/');
+              if (f === 'LICENSE' || f === 'License' || f.endsWith('/LICENSE')) return true;
+              if (f === '.github/dependabot.yml' && !isDependabot) return true;
+              if (f.startsWith('.github/workflows/') && !isDependabot) return true;
+              if (f.startsWith('docs/private/')) return true;
+              if (f.replace(/\/+/g, '/').split('/').includes('tariff')) return true;
+              if (f.replace(/\/+/g, '/').split('/').includes('partner')) return true;
+              if (f.replace(/\/+/g, '/').split('/').includes('guarantee')) return true;
+              if (f.replace(/\/+/g, '/').split('/').includes('migration')) return true;
+              return false;
+            };
+
+            const bad = (files || []).map((f) => f.filename).filter(blockPatterns);
+            if (bad.length) {
+              const body =
+                'Automerge (EMM-227) is **not** run for this PR: blocked paths in diff.\n' +
+                bad.map((b) => `- \`${b}\``).join('\n');
+              await github.rest.issues.createComment({ owner, repo, issue_number: prNumber, body });
+              return;
+            }
+
+            const nodeId = pr.node_id;
+            if (!nodeId) {
+              await core.setFailed('Missing pull_request.node_id for GraphQL.');
+              return;
+            }
+            await core.info('Enabling auto-merge (squash) for eligible R0/R1 public-safe PR...');
+            const mutation = `mutation($id: ID!) {
+              enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: SQUASH }) {
+                pullRequest { id }
+              }
+            }`;
+            try {
+              await github.graphql(mutation, { id: nodeId });
+            } catch (e) {
+              const msg = e && e.message ? e.message : String(e);
+              await core.warning('enablePullRequestAutoMerge failed: ' + msg);
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: prNumber,
+                body: 'Automerge could not be enabled (enable *Allow auto-merge* in repository settings, or merge manually if checks are green).'
+              });
+            }

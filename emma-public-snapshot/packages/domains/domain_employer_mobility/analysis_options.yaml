@@ -1,0 +1,4 @@
+analyzer:
+  errors:
+    # Generated freezed/json_serializable files may trigger these.
+    invalid_annotation_target: ignore

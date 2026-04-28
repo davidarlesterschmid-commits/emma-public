@@ -1,0 +1,16 @@
+name: domain_wallet
+description: Wallet domain — budget and payment entities.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  freezed_annotation: ^3.1.0
+
+dev_dependencies:
+  build_runner: any
+  freezed: any
+  json_serializable: any
+  test: any

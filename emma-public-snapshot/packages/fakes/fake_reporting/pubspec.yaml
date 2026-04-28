@@ -1,0 +1,13 @@
+name: fake_reporting
+description: Deterministic fake reporting snapshot for MVP simulation.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  domain_reporting: any
+
+dev_dependencies:
+  test: any

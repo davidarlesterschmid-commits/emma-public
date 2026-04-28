@@ -1,0 +1,10 @@
+name: emma_testkit
+description: Shared pure Dart test helpers.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dev_dependencies:
+  test: any

@@ -1,0 +1,680 @@
+name: LLM review (stage 2)
+
+on:
+  pull_request:
+    branches: [main]
+    types: [ready_for_review, synchronize]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  checks: read
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run LLM review for PRs (post outcome + Linear GATE OUTCOME)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          import urllib.error
+          import urllib.request
+          from datetime import datetime, timezone
+          from typing import Any
+
+          def info(msg: str) -> None:
+              print(f"LLM review: {msg}")
+
+          def err(msg: str) -> None:
+              print(f"::error::LLM review: {msg}")
+
+          def mark_infra_unavailable(reason: str) -> None:
+              marker = "LLM_REVIEW_STATUS=INFRA_UNAVAILABLE"
+              print(marker)
+              info(f"Provider infrastructure unavailable: {reason}")
+              env_path = os.environ.get("GITHUB_ENV")
+              if env_path:
+                  with open(env_path, "a", encoding="utf-8") as f:
+                      f.write(marker + "\n")
+              summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+              if summary_path:
+                  with open(summary_path, "a", encoding="utf-8") as f:
+                      f.write("LLM_REVIEW_STATUS=INFRA_UNAVAILABLE\n")
+                      f.write(f"Reason: {reason}\n")
+
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
+              event = json.load(f)
+
+          pr = event.get("pull_request") or {}
+          pr_number = int(pr.get("number") or 0)
+          is_draft = pr.get("draft") is True
+          repo_full = str(((event.get("repository") or {}).get("full_name") or "")).strip()
+          pr_body = str(pr.get("body") or "")
+          pr_url = str(pr.get("html_url") or "")
+          head_sha = str(((pr.get("head") or {}).get("sha") or "")).strip()
+
+          if not pr_number or not repo_full or not head_sha:
+              err("Missing PR metadata (number/repo/head sha).")
+              sys.exit(1)
+          if is_draft:
+              info("PR is draft — skip.")
+              sys.exit(0)
+
+          gh_token = (os.environ.get("GITHUB_TOKEN") or "").strip()
+          anthropic_key = (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
+          openai_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+          gemini_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
+          linear_key = (os.environ.get("LINEAR_API_KEY") or "").strip()
+          model = (os.environ.get("CLAUDE_MODEL") or "").strip() or "claude-3-5-sonnet-latest"
+          openai_model = (os.environ.get("OPENAI_MODEL") or "").strip() or "gpt-4o-mini"
+          gemini_model = (os.environ.get("GEMINI_MODEL") or "").strip() or "gemini-1.5-pro"
+
+          if not gh_token:
+              err("GITHUB_TOKEN missing.")
+              sys.exit(1)
+          if not anthropic_key and not openai_key and not gemini_key:
+              mark_infra_unavailable(
+                  "No API provider secret configured. Expected fallback order: "
+                  "ANTHROPIC_API_KEY -> OPENAI_API_KEY -> GEMINI_API_KEY."
+              )
+              err(
+                  "No LLM API key available. Add at least one of these GitHub Secrets: "
+                  "ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY. "
+                  "In GitHub: Repository Settings → Secrets and variables → Actions.",
+              )
+              sys.exit(1)
+
+          def section_by_header(text: str, name: str) -> str:
+              pat = re.compile(rf"^##\s+{re.escape(name)}\s*$", re.I | re.M)
+              m = pat.search(text)
+              if not m:
+                  return ""
+              rest = text[m.end() :]
+              m2 = re.search(r"^##\s+\S", rest, re.M)
+              if m2:
+                  return rest[: m2.start()]
+              return rest
+
+          sec_risk = section_by_header(pr_body, "Risikoklasse")
+          if not sec_risk.strip():
+              sec_risk = pr_body
+          m = re.search(r"\*\*R([0-5])\*\*", sec_risk)
+          risk = f"R{m.group(1)}" if m else "?"
+          if risk == "?":
+              err("Missing explicit Risikoklasse in PR body (expected **R0**..**R5**).")
+              sys.exit(1)
+
+          linear_id_m = re.search(r"\bEMM-\d+\b", pr_body, re.I)
+          linear_id = linear_id_m.group(0).upper() if linear_id_m else "EMM-???"
+
+          api_base = f"https://api.github.com/repos/{repo_full}"
+
+          def gh_request(method: str, url: str, payload: dict[str, Any] | None = None) -> Any:
+              data = None
+              headers = {
+                  "Authorization": f"Bearer {gh_token}",
+                  "Accept": "application/vnd.github+json",
+                  "User-Agent": "emma-llm-review",
+              }
+              if payload is not None:
+                  data = json.dumps(payload).encode("utf-8")
+                  headers["Content-Type"] = "application/json"
+              req = urllib.request.Request(url, data=data, method=method, headers=headers)
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  text = resp.read().decode("utf-8", errors="replace")
+              return json.loads(text) if text.strip() else {}
+
+          # If outcome is already recorded for this head sha, skip.
+          comments = gh_request("GET", f"{api_base}/issues/{pr_number}/comments?per_page=100&page=1")
+          all_text = "\n\n".join(str(c.get("body") or "") for c in comments if isinstance(c, dict))
+          start = "<!-- EMMA_REVIEW_MARKER_START -->"
+          end = "<!-- EMMA_REVIEW_MARKER_END -->"
+
+          def iter_blocks(text: str) -> list[dict[str, str]]:
+              out: list[dict[str, str]] = []
+              offset = 0
+              while True:
+                  s = text.find(start, offset)
+                  if s < 0:
+                      break
+                  e = text.find(end, s)
+                  if e < 0:
+                      break
+                  raw = text[s + len(start) : e].strip()
+                  data: dict[str, str] = {}
+                  for line in raw.splitlines():
+                      line = line.strip()
+                      if not line or ":" not in line:
+                          continue
+                      k, v = line.split(":", 1)
+                      data[k.strip().upper()] = v.strip().upper()
+                  if data:
+                      out.append(data)
+                  offset = e + len(end)
+              return out
+
+          head7 = head_sha[:7].upper()
+          for blk in iter_blocks(all_text):
+              sha = (blk.get("EMMA_HEAD_SHA") or "").upper()
+              status = (blk.get("EMMA_LLM_STATUS") or "").upper()
+              if sha and (head7.startswith(sha) or sha.startswith(head7)):
+                  if status == "OUTCOME_RECORDED":
+                      info("Outcome marker already present for current head sha — skip.")
+                      sys.exit(0)
+
+          # Build check status list (best-effort).
+          check_lines: list[str] = []
+          try:
+              checks = gh_request("GET", f"{api_base}/commits/{head_sha}/check-runs?per_page=100")
+              items = checks.get("check_runs") if isinstance(checks, dict) else None
+              if isinstance(items, list):
+                  for check in items:
+                      if not isinstance(check, dict):
+                          continue
+                      name = str(check.get("name") or "")
+                      status = str(check.get("status") or "").upper()
+                      conclusion = str(check.get("conclusion") or "").upper()
+                      url = str(check.get("html_url") or "")
+                      state = conclusion if conclusion else status if status else "UNKNOWN"
+                      if name:
+                          suffix = f" ({url})" if url else ""
+                          check_lines.append(f"* {name}: {state}{suffix}")
+          except Exception as exc:
+              info(f"Check-runs read failed (soft): {exc}")
+          if not check_lines:
+              check_lines = ["* (keine)"]
+
+          prompt_lines: list[str] = [
+              f"## LLM REVIEW TASK — {linear_id}",
+              "",
+              "You are an LLM acting as a strict reviewer for the emma repo governance process.",
+              "Return ONLY one PR-comment in the template below (no extra prose), including the marker block.",
+              "",
+              f"PR: {pr_url}",
+              f"Linear: {linear_id}",
+              f"Head-SHA: {head_sha[:7]}",
+              f"Declared risk: {risk}",
+              "",
+              "PR body (verbatim, for scope):",
+              pr_body.strip() or "(empty)",
+              "",
+              "Check-Status:",
+          ]
+          prompt_lines.extend(check_lines)
+          prompt_lines.extend(
+              [
+                  "",
+              "Required output format (MUST match exactly):",
+              "",
+              f"### LLM-Review {linear_id}",
+              "",
+              f"- Outcome: PASS / FAIL / GATE_REQUIRED",
+              f"- Risikoklasse (deklariert): {risk}",
+              f"- Risikoklasse (Review-Einschaetzung): R0 / R1 / R2 / R3+",
+              "- Scope geprueft gegen: AGENTS.md, automerge_policy.md, agent_operating_model.md, review_merge_automation.md",
+              "",
+              "#### Befunde",
+              "",
+              "1. …",
+              "",
+              "#### Blocker (falls FAIL oder GATE_REQUIRED)",
+              "",
+              "- …",
+              "",
+              "#### Hinweise (kein Merge-Blocker)",
+              "",
+              "- …",
+              "",
+              "#### Merge-Empfehlung",
+              "",
+              "- Merge / Nicht mergen / Hochstufen auf R3+",
+              "",
+              "#### Evidenz",
+              "",
+              "- Dateien im PR: …",
+              "- Geprueft: Referenzen existieren ja/nein, Tests gelaufen ja/nein/Grund",
+              "",
+              "<!-- EMMA_REVIEW_MARKER_START -->",
+              f"EMMA_LINEAR_ID: {linear_id}",
+              f"EMMA_HEAD_SHA: {head_sha[:7]}",
+              "EMMA_REVIEW_ENGINE: LLM",
+              "EMMA_LLM_PROVIDER: ANTHROPIC|OPENAI|GEMINI",
+              "EMMA_LLM_MODEL: <model>",
+              "EMMA_LLM_STATUS: OUTCOME_RECORDED",
+              "EMMA_LLM_OUTCOME: PASS|FAIL|GATE_REQUIRED",
+              "EMMA_LLM_PASS: TRUE|FALSE",
+              "EMMA_LLM_BLOCKED: TRUE|FALSE",
+              "<!-- EMMA_REVIEW_MARKER_END -->",
+              ]
+          )
+          prompt = "\n".join(prompt_lines)
+
+          # Call an LLM API (provider order: ANTHROPIC_API_KEY -> OPENAI_API_KEY -> GEMINI_API_KEY; fallback on credit/rate errors).
+          out: dict[str, Any] = {}
+          used_provider = ""
+          used_model = ""
+
+          def call_anthropic() -> dict[str, Any]:
+              payload = {
+                  "model": model,
+                  "max_tokens": 1200,
+                  "messages": [{"role": "user", "content": prompt}],
+              }
+              req = urllib.request.Request(
+                  "https://api.anthropic.com/v1/messages",
+                  data=json.dumps(payload).encode("utf-8"),
+                  method="POST",
+                  headers={
+                      "x-api-key": anthropic_key,
+                      "anthropic-version": "2023-06-01",
+                      "content-type": "application/json",
+                      "user-agent": "emma-llm-review",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=60) as resp:
+                  raw = resp.read().decode("utf-8", errors="replace")
+              return json.loads(raw)
+
+          def call_openai() -> dict[str, Any]:
+              payload = {
+                  "model": openai_model,
+                  "messages": [{"role": "user", "content": prompt}],
+                  "temperature": 0.2,
+              }
+              req = urllib.request.Request(
+                  "https://api.openai.com/v1/chat/completions",
+                  data=json.dumps(payload).encode("utf-8"),
+                  method="POST",
+                  headers={
+                      "Authorization": f"Bearer {openai_key}",
+                      "content-type": "application/json",
+                      "user-agent": "emma-llm-review",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=60) as resp:
+                  raw = resp.read().decode("utf-8", errors="replace")
+              return json.loads(raw)
+
+          def call_gemini() -> dict[str, Any]:
+              # Google Generative Language API (API key in query string).
+              payload = {
+                  "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                  "generationConfig": {"temperature": 0.2},
+              }
+              url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={gemini_key}"
+              req = urllib.request.Request(
+                  url,
+                  data=json.dumps(payload).encode("utf-8"),
+                  method="POST",
+                  headers={
+                      "content-type": "application/json",
+                      "user-agent": "emma-llm-review",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=60) as resp:
+                  raw = resp.read().decode("utf-8", errors="replace")
+              return json.loads(raw)
+
+          def is_credit_or_rate_error(provider: str, code: int, detail: str) -> bool:
+              d = detail.lower()
+              if provider == "anthropic":
+                  return (code == 400 and "credit balance is too low" in d) or (code in (429, 503))
+              if provider == "openai":
+                  return (code in (429, 503)) or ("insufficient_quota" in d) or ("quota" in d and code in (400, 403))
+              if provider == "gemini":
+                  return code in (429, 503) or ("quota" in d) or ("rate" in d)
+              return False
+
+          def try_call(provider: str) -> tuple[bool, dict[str, Any]]:
+              # Top-level script: module globals, not an enclosing function — use `global`, not `nonlocal`.
+              global used_provider, used_model
+              try:
+                  if provider == "anthropic":
+                      used_provider = "ANTHROPIC"
+                      used_model = model
+                      return True, call_anthropic()
+                  if provider == "openai":
+                      used_provider = "OPENAI"
+                      used_model = openai_model
+                      return True, call_openai()
+                  if provider == "gemini":
+                      used_provider = "GEMINI"
+                      used_model = gemini_model
+                      return True, call_gemini()
+                  return False, {}
+              except urllib.error.HTTPError as exc:
+                  detail = exc.read().decode("utf-8", errors="replace") if exc.fp else str(exc)
+                  if is_credit_or_rate_error(provider, exc.code, detail):
+                      info(f"{provider} unavailable (credits/quota/rate) — fallback. code={exc.code}")
+                      return False, {}
+                  err(f"{provider} API HTTP error: {exc.code} {detail[:500]}")
+                  sys.exit(1)
+              except Exception as exc:
+                  err(f"{provider} API call failed: {exc}")
+                  sys.exit(1)
+
+          try:
+              providers: list[str] = []
+              if anthropic_key:
+                  providers.append("anthropic")
+              if openai_key:
+                  providers.append("openai")
+              if gemini_key:
+                  providers.append("gemini")
+              info("Provider fallback order for this run: " + " -> ".join(p.upper() for p in providers))
+              ok = False
+              for p in providers:
+                  ok, out = try_call(p)
+                  if ok:
+                      break
+              if not ok:
+                  mark_infra_unavailable("All configured LLM providers unavailable due to credits/quota/rate limits.")
+                  err("All configured LLM providers unavailable due to credits/quota/rate limits.")
+                  sys.exit(1)
+          except SystemExit:
+              raise
+
+          # Extract assistant text.
+          text_parts: list[str] = []
+          if used_provider == "ANTHROPIC":
+              for block in (out.get("content") or []) if isinstance(out, dict) else []:
+                  if isinstance(block, dict) and block.get("type") == "text":
+                      text_parts.append(str(block.get("text") or ""))
+          else:
+              if used_provider == "OPENAI":
+                  choices = out.get("choices") if isinstance(out, dict) else None
+                  if isinstance(choices, list) and choices:
+                      msg = choices[0].get("message") if isinstance(choices[0], dict) else None
+                      if isinstance(msg, dict):
+                          text_parts.append(str(msg.get("content") or ""))
+              elif used_provider == "GEMINI":
+                  # generativelanguage: candidates[0].content.parts[0].text
+                  cands = out.get("candidates") if isinstance(out, dict) else None
+                  if isinstance(cands, list) and cands:
+                      content = cands[0].get("content") if isinstance(cands[0], dict) else None
+                      parts = content.get("parts") if isinstance(content, dict) else None
+                      if isinstance(parts, list) and parts:
+                          text_parts.append(str(parts[0].get("text") or ""))
+          claude_text = "\n".join(text_parts).strip()
+          if not claude_text:
+              err(f"LLM response missing text content (provider={used_provider}).")
+              sys.exit(1)
+
+          # Validate marker block for current head sha.
+          mblk = re.search(
+              r"<!--\s*EMMA_REVIEW_MARKER_START\s*-->(?P<body>[\s\S]*?)<!--\s*EMMA_REVIEW_MARKER_END\s*-->",
+              claude_text,
+              re.I,
+          )
+          if not mblk:
+              err("LLM output missing EMMA_REVIEW_MARKER block.")
+              sys.exit(1)
+          marker_body = mblk.group("body")
+          kv: dict[str, str] = {}
+          for line in marker_body.splitlines():
+              line = line.strip()
+              if not line or ":" not in line:
+                  continue
+              k, v = line.split(":", 1)
+              kv[k.strip().upper()] = v.strip().upper()
+
+          if kv.get("EMMA_LINEAR_ID") not in (linear_id.upper(), "EMM-???"):
+              err(f"Marker EMMA_LINEAR_ID mismatch: {kv.get('EMMA_LINEAR_ID')}")
+              sys.exit(1)
+          sha_m = kv.get("EMMA_HEAD_SHA") or ""
+          if not sha_m or not head7.startswith(sha_m) and not sha_m.startswith(head7):
+              err(f"Marker EMMA_HEAD_SHA mismatch: {sha_m} (expected {head7})")
+              sys.exit(1)
+          if kv.get("EMMA_LLM_STATUS") != "OUTCOME_RECORDED":
+              err(f"Marker EMMA_LLM_STATUS invalid: {kv.get('EMMA_LLM_STATUS')}")
+              sys.exit(1)
+          outcome = kv.get("EMMA_LLM_OUTCOME") or ""
+          passed = kv.get("EMMA_LLM_PASS") or ""
+          blocked = kv.get("EMMA_LLM_BLOCKED") or ""
+          if outcome not in ("PASS", "FAIL", "GATE_REQUIRED"):
+              err(f"Marker EMMA_LLM_OUTCOME invalid: {outcome}")
+              sys.exit(1)
+          if outcome == "PASS" and passed != "TRUE":
+              err("Marker EMMA_LLM_PASS must be TRUE when outcome PASS.")
+              sys.exit(1)
+          if outcome != "PASS" and passed != "FALSE":
+              err("Marker EMMA_LLM_PASS must be FALSE when outcome is not PASS.")
+              sys.exit(1)
+          if outcome in ("FAIL", "GATE_REQUIRED") and blocked != "TRUE":
+              err("Marker EMMA_LLM_BLOCKED must be TRUE when outcome is FAIL or GATE_REQUIRED.")
+              sys.exit(1)
+
+          # Ensure provider/model fields exist (best-effort: if missing, patch marker block into comment).
+          if not kv.get("EMMA_LLM_PROVIDER") or not kv.get("EMMA_LLM_MODEL"):
+              info("Marker missing provider/model fields — continuing (backwards compatible).")
+
+          # Post outcome comment to PR (issues comments API).
+          gh_request("POST", f"{api_base}/issues/{pr_number}/comments", {"body": claude_text})
+          info(f"Posted LLM outcome comment (provider={used_provider}, outcome={outcome}).")
+
+          # Force PR governance rerun by editing PR body (no semantic change, just a hidden stamp).
+          stamp = (
+              "\n\n<!-- EMMA_LLM_OUTCOME_STAMP "
+              + head_sha[:7]
+              + " "
+              + outcome
+              + " "
+              + datetime.now(timezone.utc).isoformat()
+              + " -->\n"
+          )
+          new_body = pr_body.rstrip() + stamp
+          gh_request("PATCH", f"{api_base}/pulls/{pr_number}", {"body": new_body})
+          info("Updated PR body to trigger governance rerun.")
+
+          # Follow-up rule: GATE_REQUIRED must create a follow-up signal in the PR.
+          if outcome == "GATE_REQUIRED":
+              try:
+                  gh_request(
+                      "POST",
+                      f"{api_base}/issues/{pr_number}/labels",
+                      {"labels": ["gate-required"]},
+                  )
+                  info("Added PR label gate-required.")
+              except Exception as exc:
+                  info(f"Label add failed (soft): {exc}")
+
+          # Post Linear GATE OUTCOME if configured and Linear ID found.
+          if not linear_key or linear_id == "EMM-???":
+              info("Linear GATE OUTCOME skipped (missing LINEAR_API_KEY or Linear ID not found in PR body).")
+              sys.exit(0)
+
+          def linear_graphql(query: str, variables: dict[str, Any] | None = None) -> Any:
+              payload: dict[str, Any] = {"query": query}
+              if variables is not None:
+                  payload["variables"] = variables
+              data = json.dumps(payload).encode("utf-8")
+              req = urllib.request.Request(
+                  "https://api.example.invalid/graphql",
+                  data=data,
+                  method="POST",
+                  headers={
+                      "Authorization": linear_key,
+                      "Content-Type": "application/json",
+                      "User-Agent": "emma-llm-review",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  text = resp.read().decode("utf-8", errors="replace")
+              return json.loads(text)
+
+          issue_q = """
+          query Issue($id: String!) { issue(id: $id) { id identifier title } }
+          """
+          issue_resp = linear_graphql(issue_q, {"id": linear_id})
+          issue = ((issue_resp.get("data") or {}).get("issue") or {}) if isinstance(issue_resp, dict) else {}
+          issue_uuid = str(issue.get("id") or "")
+          if not issue_uuid:
+              info("Linear issue lookup failed; skip Linear comment.")
+              sys.exit(0)
+
+          verdict = "PASS" if outcome == "PASS" else "BLOCKED"
+          merge_allowed = "ja" if outcome == "PASS" else "nein"
+          gate_body = "\n".join(
+              [
+                  f"## GATE OUTCOME — {linear_id}",
+                  "",
+                  f"Reviewer: LLM ({used_provider})",
+                  f"PR: {pr_url}",
+                  "Snapshot-Version: n/a",
+                  "Main-SHA (Snapshot): n/a",
+                  f"Verdict: {verdict}",
+                  "Snapshot gegen PR/Diff geprueft: nein",
+                  "Context-Drift: none",
+                  "",
+                  "Must-Fix:",
+                  "",
+                  "* (keine)",
+                  "",
+                  "Should-Fix:",
+                  "",
+                  "* (keine)",
+                  "",
+                  f"Merge erlaubt: {merge_allowed}",
+                  "",
+                  f"Status: {verdict}",
+              ]
+          )
+
+          comment_m = """
+          mutation CommentCreate($issueId: String!, $body: String!) {
+            commentCreate(input: { issueId: $issueId, body: $body }) { success }
+          }
+          """
+          linear_graphql(comment_m, {"issueId": issue_uuid, "body": gate_body})
+          info("Posted Linear GATE OUTCOME comment.")
+          sys.exit(0)
+
+          blocks = out.get("content") if isinstance(out, dict) else None
+          text = ""
+          if isinstance(blocks, list):
+              for b in blocks:
+                  if isinstance(b, dict) and b.get("type") == "text":
+                      text += str(b.get("text") or "")
+          text = text.strip()
+          if not text:
+              err("LLM returned empty response.")
+              sys.exit(1)
+
+          # Validate marker block presence + correct head sha.
+          if start not in text or end not in text:
+              err("LLM response missing EMMA_REVIEW_MARKER block.")
+              sys.exit(1)
+          if f"EMMA_HEAD_SHA: {head_sha[:7]}".upper() not in text.upper():
+              err("LLM marker block does not match current head sha.")
+              sys.exit(1)
+          if "EMMA_LLM_STATUS: OUTCOME_RECORDED" not in text.upper():
+              err("LLM marker status is not OUTCOME_RECORDED.")
+              sys.exit(1)
+
+          # Post outcome comment to PR.
+          gh_request("POST", f"{api_base}/issues/{pr_number}/comments", {"body": text})
+          info("Posted LLM outcome comment.")
+
+          # Force PR governance re-run by editing PR body (append a no-op HTML comment per head sha).
+          try:
+              tag = f"<!-- EMMA_LLM_OUTCOME_SHA:{head_sha[:7]} -->"
+              if tag not in pr_body:
+                  gh_request("PATCH", f"{api_base}/pulls/{pr_number}", {"body": pr_body.rstrip() + "\n\n" + tag + "\n"})
+                  info("Patched PR body to trigger governance re-run.")
+          except Exception as exc:
+              info(f"PR body patch failed (soft): {exc}")
+
+          # Linear: post GATE OUTCOME (best-effort).
+          if not linear_key or linear_id == "EMM-???":
+              info("Linear GATE OUTCOME skipped (missing LINEAR_API_KEY or Linear ID not found).")
+              sys.exit(0)
+
+          def linear_graphql(query: str, variables: dict[str, Any] | None = None) -> Any:
+              payload: dict[str, Any] = {"query": query}
+              if variables is not None:
+                  payload["variables"] = variables
+              data = json.dumps(payload).encode("utf-8")
+              req = urllib.request.Request(
+                  "https://api.example.invalid/graphql",
+                  data=data,
+                  method="POST",
+                  headers={
+                      "Authorization": linear_key,
+                      "Content-Type": "application/json",
+                      "User-Agent": "emma-llm-review",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  txt = resp.read().decode("utf-8", errors="replace")
+              return json.loads(txt)
+
+          issue_q = """
+          query Issue($id: String!) { issue(id: $id) { id identifier } }
+          """
+          issue_resp = linear_graphql(issue_q, {"id": linear_id})
+          issue = ((issue_resp.get("data") or {}).get("issue") or {}) if isinstance(issue_resp, dict) else {}
+          issue_uuid = str(issue.get("id") or "")
+          if not issue_uuid:
+              info("Linear issue lookup failed; skip Linear GATE OUTCOME.")
+              sys.exit(0)
+
+          # Determine verdict from marker lines.
+          outcome_m = re.search(r"EMMA_LLM_OUTCOME:\s*(PASS|FAIL|GATE_REQUIRED)", text, re.I)
+          outcome = outcome_m.group(1).upper() if outcome_m else "BLOCKED"
+          verdict = "PASS" if outcome == "PASS" else "REQUEST_CHANGES" if outcome == "FAIL" else "BLOCKED"
+          merge_allowed = "ja" if verdict == "PASS" else "nein"
+
+          now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+          gate_body = "\n".join(
+              [
+                  f"## GATE OUTCOME — {linear_id}",
+                  "",
+                  f"Reviewer: LLM ({used_provider})",
+                  f"PR: {pr_url}",
+                  "Snapshot-Version: n/a",
+                  "Main-SHA (Snapshot): n/a",
+                  f"Verdict: {verdict}",
+                  "Snapshot gegen PR/Diff geprueft: nein",
+                  "Context-Drift: none",
+                  "",
+                  "Must-Fix:",
+                  "",
+                  "* (siehe PR Outcome Kommentar)",
+                  "",
+                  "Should-Fix:",
+                  "",
+                  "* (siehe PR Outcome Kommentar)",
+                  "",
+                  f"Merge erlaubt: {merge_allowed}",
+                  "",
+                  f"Zeitpunkt: {now}",
+                  f"Status: {verdict}",
+              ]
+          )
+
+          comment_m = """
+          mutation CommentCreate($issueId: String!, $body: String!) {
+            commentCreate(input: { issueId: $issueId, body: $body }) { success }
+          }
+          """
+          linear_graphql(comment_m, {"issueId": issue_uuid, "body": gate_body})
+          info("Posted Linear GATE OUTCOME comment.")
+          PY

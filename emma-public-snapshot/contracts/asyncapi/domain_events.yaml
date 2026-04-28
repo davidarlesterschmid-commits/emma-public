@@ -1,0 +1,19 @@
+asyncapi: 2.6.0
+info:
+  title: emma Domain Events
+  version: 0.1.0
+channels:
+  journey.options.planned:
+    subscribe:
+      message:
+        name: JourneyOptionsPlanned
+        payload:
+          type: object
+          required:
+            - journeyId
+            - optionCount
+          properties:
+            journeyId:
+              type: string
+            optionCount:
+              type: integer

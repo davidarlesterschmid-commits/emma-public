@@ -1,0 +1,818 @@
+{
+  "meta": {
+    "generated_on": "2026-04-24",
+    "repo_path_used": "C:\\Users\\david\\Entwicklung\\GitHub\\emma",
+    "requested_repo_path": "C:\\Users\\david\\OneDrive\\Dokumente\\GitHub\\emma",
+    "requested_repo_path_exists": false,
+    "assumptions": [
+      "Audit was executed against the active git workspace because the requested OneDrive path does not exist in this environment.",
+      "Source of truth used: docs/architecture/Modultabelle.xlsx, docs/product/PRODUKT.md, docs/architecture/MAPPING.md, docs/planning/STATUS.md, docs/technical/SPECS_MVP.md, docs/_archive/2026-04-consolidation/*.",
+      "No standalone tracked 67-function equivalence matrix was found in the current repository."
+    ]
+  },
+  "repo_structure": {
+    "active_apps": [
+      "apps/emma_app"
+    ],
+    "active_packages": {
+      "adapters": [
+        "packages/adapters/adapter_gemini",
+        "packages/adapters/adapter_maps",
+        "packages/adapters/adapter_trias"
+      ],
+      "core": [
+        "packages/core/emma_contracts",
+        "packages/core/emma_core",
+        "packages/core/emma_testkit",
+        "packages/core/emma_ui_kit"
+      ],
+      "domains": [
+        "packages/domains/domain_customer_service",
+        "packages/domains/domain_employer_mobility",
+        "packages/domains/domain_identity",
+        "packages/domains/domain_journey",
+        "packages/domains/domain_partnerhub",
+        "packages/domains/domain_reporting",
+        "packages/domains/domain_rules",
+        "packages/domains/domain_wallet"
+      ],
+      "fakes": [
+        "packages/fakes/fake_chat",
+        "packages/fakes/fake_maps",
+        "packages/fakes/fake_realtime"
+      ],
+      "features": [
+        "packages/features/feature_auth",
+        "packages/features/feature_employer_mobility",
+        "packages/features/feature_journey"
+      ]
+    },
+    "active_services": [
+      "services/bff_mobile"
+    ],
+    "docs_folders": [
+      "docs/architecture",
+      "docs/migration",
+      "docs/planning",
+      "docs/product",
+      "docs/technical",
+      "docs/_archive"
+    ],
+    "scripts": [
+      "tools/scripts/Test-EmmaFeatureCoverage.ps1",
+      "tools/scripts/emma-git-bash.sh",
+      "tools/scripts/sync_instructions.ps1",
+      "tools/scripts/sync_instructions.sh"
+    ],
+    "parallel_or_duplicate_structures": [
+      {
+        "area": "routing",
+        "canonical": "apps/emma_app/lib/composition/journey_search_screen.dart + packages/features/feature_journey",
+        "parallel": "apps/emma_app/lib/features/trips/**",
+        "note": "Both /journey and legacy /trips are still routed."
+      },
+      {
+        "area": "auth",
+        "canonical": "apps/emma_app/lib/features/auth/presentation/providers/auth_providers.dart + packages/features/feature_auth",
+        "parallel": "none active, but old auth_and_identity paths remain in git history and docs"
+      },
+      {
+        "area": "customer_service_reporting_entities",
+        "canonical": "packages/domains/domain_customer_service and packages/domains/domain_reporting",
+        "parallel": "apps/emma_app/lib/features/customer_service/domain/entities/support_case.dart and apps/emma_app/lib/features/data_reporting/domain/entities/reporting_event.dart",
+        "note": "App-local files are now re-export shims, not separate models."
+      },
+      {
+        "area": "deleted_feature_ghosts",
+        "canonical": "no tracked feature folders",
+        "parallel": "apps/emma_app/.dart_tool/build/generated/emma_app/lib/features/{mobility_guarantee,partnerhub,migration}",
+        "note": "Generated artifacts make removed features look present."
+      }
+    ]
+  },
+  "build_test_context": {
+    "workspace_config": {
+      "melos_yaml_present": false,
+      "melos_config_location": "pubspec.yaml",
+      "workspace_members_count": 23,
+      "analysis_options_root": "analysis_options.yaml",
+      "integration_test_folder": "apps/emma_app/integration_test",
+      "integration_test_status": "only .gitkeep",
+      "driver_folder_present": false
+    },
+    "toolchain": {
+      "dart": "3.11.4",
+      "flutter": "3.41.6"
+    },
+    "verification": {
+      "dart_analyze": "passed",
+      "test_suites_passed": [
+        "packages/adapters/adapter_gemini",
+        "packages/adapters/adapter_trias",
+        "packages/domains/domain_customer_service",
+        "packages/domains/domain_journey",
+        "packages/domains/domain_reporting",
+        "packages/fakes/fake_chat",
+        "packages/fakes/fake_maps",
+        "packages/adapters/adapter_maps",
+        "packages/core/emma_ui_kit",
+        "packages/features/feature_employer_mobility",
+        "packages/features/feature_journey",
+        "apps/emma_app"
+      ],
+      "melos_non_interactive_note": "dart run melos run test:* opens an interactive package-selection prompt in this terminal, so package-local test commands were used instead."
+    },
+    "important_references": [
+      "README.md",
+      "docs/README.md",
+      "docs/product/PRODUKT.md",
+      "docs/planning/STATUS.md",
+      "docs/architecture/MAPPING.md",
+      "docs/technical/SPECS_MVP.md"
+    ],
+    "notable_doc_drift": [
+      "Active docs still refer to melos.yaml although melos config is in pubspec.yaml.",
+      "apps/emma_app/README.md still describes the app folder as incomplete pre-flutter-create target.",
+      "trip_boundary_mapping_rules.md still contains pre-package migration wording."
+    ]
+  },
+  "improvements_since_last_known_state": [
+    "Auth provider hoist is effectively completed: app-shell auth providers now live in apps/emma_app/lib/features/auth/presentation/providers/auth_providers.dart, while feature_auth provides data/widgets only.",
+    "Chat and directions are now behind ChatPort and DirectionsPort with Fake-First wiring and tests.",
+    "Journey engine/domain code was extracted out of app-local journey_engine stubs into packages/domains/domain_journey and packages/features/feature_journey.",
+    "A canonical /journey route and composition wrapper were added on top of feature_journey.",
+    "New active workspace packages since the 2026-04-16 state: adapter_gemini, fake_chat, fake_maps, domain_customer_service, domain_employer_mobility, domain_reporting, feature_auth, feature_employer_mobility.",
+    "Test coverage increased materially across auth, home chat, journey widgets/domain services, fakes, employer mobility, and UI kit."
+  ],
+  "regressions_since_last_known_state": [
+    "Tracked app-local feature trees for mobility_guarantee, partnerhub, and migration were deleted after 2026-04-16 without visible tracked replacements.",
+    "Documentation still references removed feature paths and outdated workspace files, creating a false sense of feature availability.",
+    "Legacy /trips remains routed in parallel to the newer /journey flow, keeping duplicate routing surfaces alive.",
+    "Several implementations now look integration-ready by naming (RemoteDataSource, Service, Adapter) while remaining hardcoded mock/placeholder code."
+  ],
+  "critical_functional_gaps": [
+    "No explicit ticketing domain/port/product catalog exists.",
+    "No QR-/barcode-ticket rendering exists.",
+    "Subscriptions/D-Ticket remain placeholder-level and are split across subscriptions and employer job-ticket mocks.",
+    "Check-in/check-out is a placeholder screen only.",
+    "Notifications are a placeholder screen only and no NotificationPort exists.",
+    "Realtime monitoring and operational journey guidance are not implemented as real user-trip monitoring.",
+    "Partnerhub, sharing, on-demand, taxi, and partner transactions are not implemented beyond textual or model-level hints.",
+    "No standalone tracked 67-function equivalence matrix is available for row-level parity sign-off."
+  ],
+  "architecture_conflicts": [
+    "melos.yaml is absent, but multiple active docs still treat it as canonical.",
+    "JourneyCase still describes itself as a 5-phase journey while JourneyPhase and the module table define 8 phases.",
+    "TariffPort in code only exposes getAvailableTariffs(), contradicting SPECS_MVP M11.",
+    "Money/value models across tariff/subscription/payment/budget/job ticket still use double instead of cent-safe integer amounts.",
+    "Provider-only-in-app-shell target is only partially implemented: auth is hoisted, feature_journey and feature_employer_mobility still define providers in packages.",
+    "Legacy /trips and canonical /journey remain active side by side.",
+    "Docs still reference tracked mobility_guarantee/partnerhub/migration feature paths that no longer exist in the repository."
+  ],
+  "mock_solutions_that_look_real": [
+    {
+      "path": "packages/adapters/adapter_trias/lib/src/trias_service.dart",
+      "reason": "Service name suggests a real TRIAS backend, but returns hardcoded locations/trips after Future.delayed."
+    },
+    {
+      "path": "packages/adapters/adapter_trias/lib/src/trias_routing_adapter.dart",
+      "reason": "Real adapter class exists but throws UnimplementedError for calculateRoute."
+    },
+    {
+      "path": "apps/emma_app/lib/features/trips/data/datasources/trip_remote_datasource.dart",
+      "reason": "RemoteDataSource name suggests real HTTP transport, but returns hardcoded routes and locations."
+    },
+    {
+      "path": "packages/features/feature_employer_mobility/lib/src/data/benefit_remote_datasource.dart",
+      "reason": "RemoteDataSource backed by Dio, but all outputs are mock hardcodes."
+    },
+    {
+      "path": "packages/features/feature_employer_mobility/lib/src/data/budget_remote_datasource.dart",
+      "reason": "RemoteDataSource backed by Dio, but all outputs are mock hardcodes."
+    },
+    {
+      "path": "packages/features/feature_employer_mobility/lib/src/data/job_ticket_remote_datasource.dart",
+      "reason": "RemoteDataSource backed by Dio, but all outputs are mock hardcodes."
+    },
+    {
+      "path": "packages/features/feature_auth/lib/src/data/auth_remote_datasource.dart",
+      "reason": "RemoteDataSource returns demo users; no real IdP call happens."
+    },
+    {
+      "path": "apps/emma_app/lib/features/tariff_rules/data/repositories/tariff_repository_impl.dart",
+      "reason": "Repository name suggests tariff backend integration, but exposes a local mock D-ticket and a distance formula."
+    },
+    {
+      "path": "apps/emma_app/lib/features/subscriptions/data/datasources/subscription_remote_datasource.dart",
+      "reason": "RemoteDataSource is mostly TODO/placeholder with UnimplementedError."
+    }
+  ],
+  "data_junk_altstand": [
+    {
+      "path": "docs/_archive/2026-04-consolidation/",
+      "category": "Referenz/Altstand",
+      "risk": "low",
+      "recommendation": "Keep as read-only reference; do not treat as current truth."
+    },
+    {
+      "path": "apps/emma_app/.dart_tool/build/generated/emma_app/lib/features/mobility_guarantee/",
+      "category": "loeschverdaechtig, aber vor Loeschung zu pruefen",
+      "risk": "high",
+      "recommendation": "Treat as stale generated artifact until proven otherwise; exclude from audits."
+    },
+    {
+      "path": "apps/emma_app/.dart_tool/build/generated/emma_app/lib/features/partnerhub/",
+      "category": "loeschverdaechtig, aber vor Loeschung zu pruefen",
+      "risk": "high",
+      "recommendation": "Treat as stale generated artifact until proven otherwise; exclude from audits."
+    },
+    {
+      "path": "apps/emma_app/.dart_tool/build/generated/emma_app/lib/features/migration/",
+      "category": "loeschverdaechtig, aber vor Loeschung zu pruefen",
+      "risk": "high",
+      "recommendation": "Treat as stale generated artifact until proven otherwise; exclude from audits."
+    },
+    {
+      "path": "apps/emma_app/build/",
+      "category": "tatsaechlich entbehrlich, sofern nicht importiert/referenziert",
+      "risk": "low",
+      "recommendation": "Do not count as active structure; rebuild when needed."
+    },
+    {
+      "path": "packages/**/build/",
+      "category": "tatsaechlich entbehrlich, sofern nicht importiert/referenziert",
+      "risk": "low",
+      "recommendation": "Ignore in audits and keep out of source-of-truth reasoning."
+    },
+    {
+      "path": ".dart_tool/ and packages/**/.dart_tool/",
+      "category": "tatsaechlich entbehrlich, sofern nicht importiert/referenziert",
+      "risk": "medium",
+      "recommendation": "Exclude from code-structure and parity analysis."
+    },
+    {
+      "path": "apps/emma_app/linux/flutter/ephemeral/",
+      "category": "tatsaechlich entbehrlich, sofern nicht importiert/referenziert",
+      "risk": "medium",
+      "recommendation": "Do not count nested plugin tests or pubspecs as repo-owned app structure."
+    },
+    {
+      "path": "apply_output.txt",
+      "category": "generierter Report",
+      "risk": "low",
+      "recommendation": "Keep only if still useful as local tooling output."
+    },
+    {
+      "path": "dryrun_output.txt",
+      "category": "generierter Report",
+      "risk": "low",
+      "recommendation": "Keep only if still useful as local tooling output."
+    },
+    {
+      "path": ".idea/ and *.iml",
+      "category": "loeschverdaechtig, aber vor Loeschung zu pruefen",
+      "risk": "low_to_medium",
+      "recommendation": "Treat as local IDE artifacts, not product evidence."
+    },
+    {
+      "path": ".env and apps/emma_app/.env",
+      "category": "loeschverdaechtig, aber vor Loeschung zu pruefen",
+      "risk": "medium",
+      "recommendation": "Current build wiring uses --dart-define; verify whether these files are still needed locally."
+    },
+    {
+      "path": "tools/scripts/Test-EmmaFeatureCoverage.ps1",
+      "category": "Test-/Audit-Artefakt",
+      "risk": "low",
+      "recommendation": "Keep, but realign it with the current 14-module source-of-truth if it stays in active use."
+    }
+  ],
+  "traceability_14_modules": [
+    {
+      "id": 1,
+      "module": "KI-Interaktionsschicht / emma Assistant",
+      "packages_files": [
+        "apps/emma_app/lib/features/home/presentation/screens/home_screen.dart",
+        "apps/emma_app/lib/features/home/presentation/view_models/home_chat_notifier.dart",
+        "packages/core/emma_contracts/lib/src/ports/chat_port.dart",
+        "packages/core/emma_contracts/lib/src/ports/directions_port.dart",
+        "packages/fakes/fake_chat",
+        "packages/fakes/fake_maps",
+        "packages/adapters/adapter_gemini",
+        "packages/adapters/adapter_maps"
+      ],
+      "screens": [
+        "HomeScreen"
+      ],
+      "services_ports": [
+        "HomeChatNotifier",
+        "ChatPort",
+        "DirectionsPort",
+        "FakeChatAdapter",
+        "GeminiChatAdapter",
+        "FakeDirectionsAdapter",
+        "GoogleMapsDirectionsAdapter"
+      ],
+      "tests": [
+        "apps/emma_app/test/features/home/home_chat_notifier_test.dart",
+        "packages/fakes/fake_chat/test/fake_chat_adapter_test.dart",
+        "packages/adapters/adapter_gemini/test/gemini_chat_adapter_test.dart",
+        "packages/fakes/fake_maps/test/fake_directions_adapter_test.dart",
+        "packages/adapters/adapter_maps/test/google_maps_directions_adapter_test.dart"
+      ],
+      "status": "vorbereitet",
+      "gaps": [
+        "No deep intent handoff into booking/ticketing phases",
+        "No proactive end-to-end mobility orchestration",
+        "No multilingual assistant behaviour beyond generic text handling"
+      ],
+      "next_step": "Bind the home assistant directly to JourneyCase orchestration instead of only prompt enrichment."
+    },
+    {
+      "id": 2,
+      "module": "Identitaet, Konto, Einwilligung und Praeferenzprofil",
+      "packages_files": [
+        "packages/domains/domain_identity",
+        "packages/features/feature_auth",
+        "apps/emma_app/lib/features/auth/presentation/providers/auth_providers.dart",
+        "apps/emma_app/lib/features/auth/presentation/screens/login_screen.dart",
+        "apps/emma_app/lib/features/account/presentation/screens/profile_screen.dart"
+      ],
+      "screens": [
+        "LoginScreen",
+        "ProfileScreen"
+      ],
+      "services_ports": [
+        "AuthNotifier",
+        "AuthRepositoryImpl",
+        "AuthRemoteDataSourceImpl",
+        "AccountRepositoryImpl"
+      ],
+      "tests": [
+        "apps/emma_app/test/features/auth/auth_notifier_test.dart"
+      ],
+      "status": "vorbereitet",
+      "gaps": [
+        "No consent-management module",
+        "No account deletion or data export path",
+        "No globally enforced multi-profile logic",
+        "No payment method / wallet ownership"
+      ],
+      "next_step": "Split identity, account, and consent into explicit flows and add missing compliance/account use cases."
+    },
+    {
+      "id": 3,
+      "module": "Kontext-, Routine- und Bedarfserkennung",
+      "packages_files": [
+        "packages/domains/domain_journey/lib/src/services/demand_recognition_engine.dart",
+        "packages/domains/domain_journey/lib/src/entities/demand_recognition_models.dart",
+        "apps/emma_app/lib/features/home/presentation/view_models/home_chat_notifier.dart"
+      ],
+      "screens": [
+        "HomeScreen",
+        "JourneyStepScreen (not routed)"
+      ],
+      "services_ports": [
+        "DemandRecognitionEngine",
+        "UserIntent"
+      ],
+      "tests": [
+        "packages/domains/domain_journey/test/journey_services_smoke_test.dart"
+      ],
+      "status": "vorbereitet",
+      "gaps": [
+        "No real calendar/location/weather/realtime source is wired",
+        "Current user-facing flow still relies on heuristics and hardcoded context"
+      ],
+      "next_step": "Wire DemandRecognitionEngine to explicit fake/real context providers and surface its result in the app."
+    },
+    {
+      "id": 4,
+      "module": "Mobilitaetsentscheidungs- und Planungs-Engine",
+      "packages_files": [
+        "packages/domains/domain_journey",
+        "packages/features/feature_journey",
+        "packages/adapters/adapter_trias",
+        "apps/emma_app/lib/features/trips"
+      ],
+      "screens": [
+        "AppJourneySearchScreen",
+        "JourneySearchScreen",
+        "JourneyOptionDetailScreen",
+        "TripSearchScreen",
+        "TripDetailScreen"
+      ],
+      "services_ports": [
+        "OptionOrchestrationEngine",
+        "TravelOptionSelectionService",
+        "RoutingPort",
+        "TriasRoutingPort"
+      ],
+      "tests": [
+        "packages/features/feature_journey/test/journey_search_screen_test.dart",
+        "packages/features/feature_journey/test/journey_option_detail_screen_test.dart",
+        "packages/domains/domain_journey/test/journey_services_smoke_test.dart",
+        "packages/domains/domain_journey/test/journey_summary_service_test.dart"
+      ],
+      "status": "vorbereitet",
+      "gaps": [
+        "Real routing data is missing",
+        "Partner modes are modeled but not implemented",
+        "Legacy /trips and canonical /journey run in parallel"
+      ],
+      "next_step": "Finish the migration to a single canonical /journey planning flow."
+    },
+    {
+      "id": 5,
+      "module": "Tarif-, Produkt- und Regelwerksmanagement",
+      "packages_files": [
+        "packages/domains/domain_rules",
+        "packages/core/emma_contracts/lib/src/ports/tariff_port.dart",
+        "apps/emma_app/lib/features/tariff_rules"
+      ],
+      "screens": [
+        "TariffScreen (not routed)"
+      ],
+      "services_ports": [
+        "TariffPort",
+        "TariffRepositoryImpl"
+      ],
+      "tests": [],
+      "status": "widerspruechlich",
+      "gaps": [
+        "Code contract contradicts SPECS_MVP M11",
+        "Only mock tariff data is exposed",
+        "No product catalog or quote API",
+        "Money model is not cent-safe"
+      ],
+      "next_step": "Align TariffPort and tariff models with SPECS_MVP M11 and add dedicated tests."
+    },
+    {
+      "id": 6,
+      "module": "Buchungs-, Ticketing- und Transaktionsorchestrierung",
+      "packages_files": [
+        "packages/domains/domain_journey/lib/src/entities/booking_intent.dart",
+        "packages/domains/domain_journey/lib/src/services/booking_execution_engine.dart",
+        "packages/domains/domain_journey/lib/src/services/payment_intent_service.dart",
+        "apps/emma_app/lib/features/tickets/presentation/screens/tickets_screen.dart",
+        "apps/emma_app/lib/features/payments/presentation/screens/payments_screen.dart"
+      ],
+      "screens": [
+        "TicketsScreen",
+        "PaymentsScreen",
+        "JourneyStepScreen (not routed)"
+      ],
+      "services_ports": [
+        "BookingIntentService",
+        "BookingExecutionEngine",
+        "PaymentIntentService"
+      ],
+      "tests": [
+        "packages/domains/domain_journey/test/journey_services_smoke_test.dart"
+      ],
+      "status": "vorbereitet",
+      "gaps": [
+        "No dedicated ticketing domain or port",
+        "No QR/barcode ticket artifact",
+        "No end-user reachable commit/rollback flow"
+      ],
+      "next_step": "Introduce domain_ticketing/TicketingPort and connect Tickets/Payments screens to real ticket state objects."
+    },
+    {
+      "id": 7,
+      "module": "Reiseakte und Journey-Orchestrator",
+      "packages_files": [
+        "packages/domains/domain_journey/lib/src/entities/journey_case.dart",
+        "packages/domains/domain_journey/lib/src/entities/journey_state.dart",
+        "packages/domains/domain_journey/lib/src/contracts/**",
+        "packages/features/feature_journey/lib/src/presentation/providers/journey_provider.dart",
+        "packages/features/feature_journey/lib/src/data/journey_repository_impl.dart"
+      ],
+      "screens": [
+        "JourneyStepScreen",
+        "JourneyStepWidget"
+      ],
+      "services_ports": [
+        "JourneyRepository",
+        "JourneyNotifier",
+        "JourneyContractMapper",
+        "MasterOrchestrator"
+      ],
+      "tests": [
+        "packages/domains/domain_journey/test/journey_case_test.dart",
+        "packages/domains/domain_journey/test/journey_contract_mapper_test.dart",
+        "packages/features/feature_journey/test/journey_step_screen_test.dart"
+      ],
+      "status": "abgedeckt",
+      "gaps": [
+        "End-user routing to the full JourneyScreen is still missing",
+        "Repository still builds a static demo case instead of persisted live cases"
+      ],
+      "next_step": "Route the app into JourneyScreen and bind JourneyCase to real session/user data."
+    },
+    {
+      "id": 8,
+      "module": "Echtzeitmonitoring und operative Reisebegleitung",
+      "packages_files": [
+        "packages/domains/domain_journey/lib/src/services/reaccommodation_service.dart",
+        "packages/fakes/fake_realtime",
+        "apps/emma_app/lib/features/trips/presentation/screens/trip_detail_screen.dart"
+      ],
+      "screens": [
+        "TripDetailScreen"
+      ],
+      "services_ports": [
+        "Journey phase activeMonitoring",
+        "ReaccommodationService"
+      ],
+      "tests": [],
+      "status": "luecke",
+      "gaps": [
+        "No RealtimePort or event stream",
+        "No actual monitoring of booked user trips",
+        "No operational notification path"
+      ],
+      "next_step": "Define RealtimePort and a minimum fake realtime event source for live journey monitoring."
+    },
+    {
+      "id": 9,
+      "module": "Stoerfall- und Mobilitaetsgarantie-Engine",
+      "packages_files": [
+        "packages/domains/domain_journey/lib/src/entities/reaccommodation_models.dart",
+        "packages/domains/domain_journey/lib/src/services/reaccommodation_service.dart",
+        "docs/technical/SPECS_MVP.md"
+      ],
+      "screens": [],
+      "services_ports": [
+        "Guarantee flags inside Journey fulfillment control"
+      ],
+      "tests": [],
+      "status": "widerspruechlich",
+      "gaps": [
+        "No tracked domain_mobility_guarantee package",
+        "No claim submission/status UI",
+        "Docs and generated artifacts imply a feature that is not tracked"
+      ],
+      "next_step": "Decide whether guarantee is intentionally removed or needs a real tracked package/feature."
+    },
+    {
+      "id": 10,
+      "module": "Partnerhub und Integrationsmanagement",
+      "packages_files": [
+        "packages/domains/domain_partnerhub/lib/src/entities/partner_profile.dart",
+        "packages/adapters/adapter_maps",
+        "packages/adapters/adapter_trias",
+        "packages/adapters/adapter_gemini"
+      ],
+      "screens": [],
+      "services_ports": [],
+      "tests": [],
+      "status": "widerspruechlich",
+      "gaps": [
+        "No partner registry/onboarding/SLA/monitoring logic",
+        "Tracked app-local partnerhub feature was removed"
+      ],
+      "next_step": "Either define a minimal canonical partnerhub scope or de-scope the docs."
+    },
+    {
+      "id": 11,
+      "module": "Kundenkonto, Wallet, Payment und Mobilitaetsbudget",
+      "packages_files": [
+        "packages/domains/domain_wallet",
+        "packages/domains/domain_employer_mobility",
+        "packages/features/feature_employer_mobility",
+        "apps/emma_app/lib/features/payments",
+        "apps/emma_app/lib/features/subscriptions"
+      ],
+      "screens": [
+        "ProfileScreen",
+        "EmployerMobilityScreen",
+        "PaymentsScreen",
+        "SubscriptionScreen"
+      ],
+      "services_ports": [
+        "BudgetPort",
+        "BudgetRepository",
+        "ProfileModeRepository",
+        "PaymentIntentService"
+      ],
+      "tests": [
+        "packages/features/feature_employer_mobility/test/profile_mode_notifier_test.dart"
+      ],
+      "status": "vorbereitet",
+      "gaps": [
+        "Wallet/payment are modeled but not operational",
+        "Subscriptions and job tickets are split instead of unified",
+        "Profile mode does not govern all downstream transactions"
+      ],
+      "next_step": "Unify subscription/job-ticket/payment/wallet ownership across identity, employer mobility, and ticketing."
+    },
+    {
+      "id": 12,
+      "module": "Kundenservice-, Fall- und Eskalationsmanagement",
+      "packages_files": [
+        "packages/domains/domain_customer_service",
+        "apps/emma_app/lib/features/customer_service",
+        "packages/features/feature_journey/lib/src/presentation/providers/journey_provider.dart"
+      ],
+      "screens": [
+        "CustomerServiceScreen"
+      ],
+      "services_ports": [
+        "SupportCase",
+        "supportCasesProvider"
+      ],
+      "tests": [
+        "packages/domains/domain_customer_service/test/support_case_test.dart"
+      ],
+      "status": "vorbereitet",
+      "gaps": [
+        "No CRM backend or escalation workflow",
+        "No SLA/ownership split between emma and partners",
+        "Screen is not routed"
+      ],
+      "next_step": "Anchor support cases in a real service flow instead of only exposing them from the demo JourneyCase."
+    },
+    {
+      "id": 13,
+      "module": "Lern- und Optimierungsmodul",
+      "packages_files": [
+        "packages/domains/domain_journey/lib/src/services/demand_recognition_engine.dart",
+        "packages/domains/domain_journey/lib/src/services/option_orchestration_engine.dart",
+        "packages/domains/domain_journey/lib/src/entities/journey_phase.dart",
+        "packages/features/feature_journey/lib/src/data/journey_repository_impl.dart"
+      ],
+      "screens": [],
+      "services_ports": [
+        "Journey optimization phase",
+        "preference/routine fields in journey blueprints"
+      ],
+      "tests": [],
+      "status": "vorbereitet",
+      "gaps": [
+        "No persistent learning loop",
+        "No transparent optimization controls",
+        "No consent-governed analytics feedback path"
+      ],
+      "next_step": "Either explicitly de-scope learning for MVP or implement a minimal persisted routine/preferences update loop."
+    },
+    {
+      "id": 14,
+      "module": "Reporting, Qualitaetssicherung und Betriebssteuerung",
+      "packages_files": [
+        "packages/domains/domain_reporting",
+        "apps/emma_app/lib/features/data_reporting",
+        "tools/scripts/Test-EmmaFeatureCoverage.ps1"
+      ],
+      "screens": [
+        "DataReportingScreen"
+      ],
+      "services_ports": [
+        "ReportingEvent",
+        "reportingEventsProvider"
+      ],
+      "tests": [
+        "packages/domains/domain_reporting/test/reporting_event_test.dart"
+      ],
+      "status": "vorbereitet",
+      "gaps": [
+        "No reporting sink or KPI dashboard",
+        "No SLA reporting or audit-trail UI",
+        "Screen is not routed"
+      ],
+      "next_step": "Define minimum operating KPIs/events and wire them to a real reporting sink."
+    }
+  ],
+  "equivalence_check": [
+    {
+      "function": "Routing / Reiseauskunft",
+      "status": "vorbereitet",
+      "evidence": [
+        "/journey route",
+        "/trips route",
+        "domain_journey",
+        "feature_journey",
+        "adapter_trias"
+      ],
+      "gap": "Demo/placeholder-level parity only; not yet equivalent to production-grade existing apps."
+    },
+    {
+      "function": "Echtzeit / Stoerungen",
+      "status": "verschlechtert",
+      "evidence": [
+        "mock disruption cards in TripDetailScreen",
+        "reaccommodation models"
+      ],
+      "gap": "No real realtime adapter or operational journey monitoring."
+    },
+    {
+      "function": "Ticketkauf",
+      "status": "verschlechtert",
+      "evidence": [
+        "TicketsScreen",
+        "BookingIntent",
+        "PaymentIntent"
+      ],
+      "gap": "No real purchase flow, wallet, or ticket artifact."
+    },
+    {
+      "function": "D-Ticket / Abo",
+      "status": "verschlechtert",
+      "evidence": [
+        "SubscriptionScreen placeholder",
+        "mock JobTicket D-ticket"
+      ],
+      "gap": "No unified subscription or D-ticket lifecycle."
+    },
+    {
+      "function": "Check-in / Check-out",
+      "status": "verschlechtert",
+      "evidence": [
+        "CheckInOutScreen"
+      ],
+      "gap": "Placeholder only."
+    },
+    {
+      "function": "On-Demand",
+      "status": "luecke",
+      "evidence": [
+        "only doc mentions / provider names"
+      ],
+      "gap": "No domain, no UI flow, no booking."
+    },
+    {
+      "function": "Sharing",
+      "status": "luecke",
+      "evidence": [
+        "Benefit catalog references nextbike/teilAuto",
+        "provider names in travel options"
+      ],
+      "gap": "No real sharing integration or booking."
+    },
+    {
+      "function": "Taxi",
+      "status": "luecke",
+      "evidence": [
+        "only referenced in docs/specs"
+      ],
+      "gap": "No taxi integration."
+    },
+    {
+      "function": "Arbeitgebermobilitaet / Mobilitaetsbudget",
+      "status": "vorbereitet",
+      "evidence": [
+        "feature_employer_mobility",
+        "domain_employer_mobility",
+        "profile_mode tests"
+      ],
+      "gap": "Structurally strong, but still backed by mock data and not globally enforced across transactions."
+    },
+    {
+      "function": "Kundenservice",
+      "status": "vorbereitet",
+      "evidence": [
+        "domain_customer_service",
+        "CustomerServiceScreen",
+        "supportCasesProvider"
+      ],
+      "gap": "Cases are displayed, not operationally processed."
+    },
+    {
+      "function": "Payment / Belege",
+      "status": "vorbereitet",
+      "evidence": [
+        "PaymentsScreen",
+        "PaymentIntentService",
+        "ReceiptDraft"
+      ],
+      "gap": "Receipt draft exists, but no PSP, persistence, or operational checkout."
+    },
+    {
+      "function": "Notifications",
+      "status": "luecke",
+      "evidence": [
+        "NotificationsScreen placeholder"
+      ],
+      "gap": "No notification infrastructure."
+    }
+  ],
+  "recommended_next_10_steps": [
+    "Bring the missing 67-function equivalence matrix into the repository or bind the audit to a concrete external source.",
+    "Update active docs to the current workspace reality and remove melos.yaml references.",
+    "Decide whether mobility_guarantee, partnerhub, and migration were intentionally removed or must return as tracked features.",
+    "Retire or explicitly quarantine the legacy /trips flow in favor of the canonical /journey flow.",
+    "Raise TariffPort and tariff models to the SPECS_MVP M11 contract with cent-safe money types.",
+    "Introduce an explicit ticketing domain/port and a real ticket artifact model.",
+    "Unify subscriptions, D-ticket, employer job tickets, payments, and wallet ownership.",
+    "Define RealtimePort and NotificationPort with a minimal fake-first implementation.",
+    "Resolve the provider-location rule by hoisting remaining feature package providers or updating the rule.",
+    "Add real integration tests for the end-to-end user journey instead of keeping integration_test empty."
+  ],
+  "blockers_open_decisions": [
+    "The requested OneDrive repo path is missing locally; the audit is based on the active git workspace.",
+    "No standalone tracked 67-function equivalence matrix is present.",
+    "The authoritative hierarchy between the 14-module table, 16-module product catalog, 18-domain model, and STATUS.md is not fully settled when they conflict.",
+    "It is unclear whether deleted mobility_guarantee/partnerhub/migration features were intentionally de-scoped or accidentally lost from tracked code.",
+    "The roadmap for real adapters in routing, tariff, realtime, partner transactions, and notifications is still undecided."
+  ]
+}

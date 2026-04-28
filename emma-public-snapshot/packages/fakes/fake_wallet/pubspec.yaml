@@ -1,0 +1,14 @@
+name: fake_wallet
+description: Deterministic fake wallet snapshot for MVP simulation.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  domain_employer_mobility: any
+  domain_wallet: any
+
+dev_dependencies:
+  test: any

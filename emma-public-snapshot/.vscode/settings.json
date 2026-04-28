@@ -1,0 +1,19 @@
+{
+  "debug.internalConsoleOptions": "openOnSessionStart",
+  "[dart]": {
+    "editor.formatOnSave": true,
+    "editor.formatOnType": true,
+    "editor.rulers": [100, 120],
+    "editor.selectionHighlight": false,
+    "editor.wordBasedSuggestions": "off"
+  },
+  "dart.projectSearchDepth": 6,
+  "dart.showTodos": true,
+  "files.exclude": {
+    "**/.dart_tool": true,
+    "**/build": true,
+    "**/.idea": true
+  },
+  "chat.editing.autoAcceptDelay": 10,
+  "claudeCode.useTerminal": true
+}

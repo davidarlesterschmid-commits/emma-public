@@ -1,0 +1,132 @@
+diff --git a/docs/architecture/MAPPING.md b/docs/architecture/MAPPING.md
+index 6e74783..2a1d1d4 100644
+--- a/docs/architecture/MAPPING.md
++++ b/docs/architecture/MAPPING.md
+@@ -64,7 +64,7 @@ Referenz-Muster fuer alle weiteren Port-Einzuege.
+ | employer_mobility   | BudgetPort OK              | domain_employer_mobility OK     | fake_employer_mobility geplant | —         | feature_employer_mobility OK                            | im Paket, zu heben (#46)       | employerDioProvider, journeyBudgetPortProvider OK     |
+ | ticketing           | — (geplant)                | domain_ticketing geplant        | fake_ticketing geplant       | —           | apps/.../ticketing geplant                               | —                              | —                                                    |
+ | routing             | RoutingPort OK, TariffPort OK | domain_journey OK              | fake_maps, fake_realtime OK   | adapter_trias OK | feature_journey OK                                 | im Paket, zu heben (#47)       | journeyRoutingPortProvider, journeyTariffPortProvider OK |
+-| mobility_guarantee  | MobilityGuaranteePort geplant, RealtimePort geplant, NotificationPort geplant | domain_mobility_guarantee geplant | fake_guarantee geplant | — | apps/.../mobility_guarantee WIP | — | — |
++| mobility_guarantee  | MobilityGuaranteePort geplant, RealtimePort geplant, NotificationPort geplant | domain_mobility_guarantee geplant | fake_guarantee geplant | — | kein App-Feature-Ordner (Alt-Ordner `apps/.../mobility_guarantee` rueckgebaut; Wiederaufbau offen) | — | — |
+ 
+ ## Matrix — Querschnitt-minimal (ADR-04, 3)
+ 
+@@ -87,8 +87,8 @@ importiert `domain_customer_service`).
+ | on_demand                        | kein Paket                                       |
+ | sharing_integrations             | kein Paket                                       |
+ | taxi_integrations                | kein Paket                                       |
+-| partnerhub                       | domain_partnerhub (leer), Feature-Ordner          |
+-| migration_factory                | kein Paket, Stub-Screen                          |
++| partnerhub                       | domain_partnerhub (leer), **kein App-Feature-Ordner** mehr (Alt-Ordner rueckgebaut) |
++| migration_factory                | kein Paket, **kein App-Feature-Ordner** (Alt-Stub rueckgebaut)                     |
+ | crm_and_service                  | domain_customer_service (leer)                    |
+ | analytics_and_reporting          | domain_reporting (leer)                           |
+ | support_and_incident_handling    | kein Paket                                        |
+@@ -188,17 +188,17 @@ Code-Sprache**. Diskussionen muessen sich an dieser Tabelle pruefen lassen.
+ | M03   | Ticketing/Produktkauf          | ticketing                       | vertikal MVP (4)            | domain_ticketing (geplant)            | apps/.../ticketing (geplant)                                  | —                       | fake_ticketing (geplant)         |
+ | M04   | Abo, D-Ticket                  | subscriptions_and_d_ticket      | in M03 mitgefuehrt           | domain_subscription (geplant)         | M03-UI-Pfad                                                   | —                       | fake_subscriptions (geplant)     |
+ | M05   | CI/CO                          | ci_co                           | Post-MVP                     | —                                    | apps/.../check_in_out (Stub)                                  | —                       | —                               |
+-| M06   | Partnerbuchung                 | sharing/on_demand/taxi          | Post-MVP                     | domain_partnerhub                     | apps/.../partnerhub                                           | adapter_maps (Beispiel) | —                               |
+-| M07   | Mobilitaetsgarantie            | mobility_guarantee              | vertikal MVP (6)            | domain_mobility_guarantee (geplant)   | apps/.../mobility_guarantee                                   | —                       | fake_guarantee (geplant)         |
++| M06   | Partnerbuchung                 | sharing/on_demand/taxi          | Post-MVP                     | domain_partnerhub                     | kein App-Feature-Ordner (rueckgebaut)                         | adapter_maps (Beispiel) | —                               |
++| M07   | Mobilitaetsgarantie            | mobility_guarantee              | vertikal MVP (6)            | domain_mobility_guarantee (geplant)   | kein App-Feature-Ordner (Alt-Ordner rueckgebaut, Wiederaufbau offen) | —                       | fake_guarantee (geplant)         |
+ | M08   | Arbeitgebermobilitaet          | employer_mobility               | vertikal MVP (3)            | domain_employer_mobility              | feature_employer_mobility + apps/.../employer_mobility        | —                       | fake_employer_mobility (geplant) |
+ | M09   | Kundenservice, Support         | crm_and_service                 | Post-MVP                     | domain_customer_service (leer)        | apps/.../customer_service (Stub)                              | —                       | —                               |
+ | M10   | Zahlungen, Belege              | payments                        | Querschnitt-minimal          | domain_wallet                         | Anzeige in M07, M08                                           | —                       | fake_payments (geplant)          |
+ | M11   | Tarifserver, Regelwerk         | tariff_and_rules                | Querschnitt-minimal (Lese)   | domain_rules                          | apps/.../tariff_rules                                         | —                       | fake_tariff (geplant)            |
+-| M12   | Partnerintegration (Hub)       | partnerhub                      | Post-MVP                     | domain_partnerhub                     | apps/.../partnerhub                                           | adapter_maps, adapter_gemini | —                         |
++| M12   | Partnerintegration (Hub)       | partnerhub                      | Post-MVP                     | domain_partnerhub                     | kein App-Feature-Ordner (rueckgebaut)                         | adapter_maps, adapter_gemini | —                         |
+ | M13   | Benachrichtigungen             | support_and_incident_handling   | Post-MVP                     | —                                    | —                                                             | —                       | —                               |
+ | M14   | Daten, Reporting               | analytics_and_reporting         | Post-MVP                     | domain_reporting (leer)               | —                                                             | —                       | —                               |
+ | M15   | Barrierefreiheit, UX           | — (Querschnitt)                 | Querschnitt-Pflicht          | emma_ui_kit                           | alle                                                          | —                       | —                               |
+-| M16   | Migration, Parallelbetrieb     | migration_factory               | Post-MVP                     | —                                    | apps/.../migration (Stub)                                     | —                       | —                               |
++| M16   | Migration, Parallelbetrieb     | migration_factory               | Post-MVP                     | —                                    | kein App-Feature-Ordner (Alt-Stub rueckgebaut)                 | —                       | —                               |
+ | —     | Chat-Assistent (neu)           | — (Querschnitt, ausserhalb Katalog) | Querschnitt-minimal       | —                                    | apps/.../home (HomeChatNotifier)                              | adapter_gemini          | fake_chat                       |
+ | —     |                                | settings_and_consent            | Querschnitt-minimal          | —                                    | apps/.../settings (Stub)                                      | —                       | fake_consent (geplant)           |
+ 
+diff --git a/docs/planning/STATUS.md b/docs/planning/STATUS.md
+index cf17d7a..3dd0457 100644
+--- a/docs/planning/STATUS.md
++++ b/docs/planning/STATUS.md
+@@ -132,7 +132,9 @@ Reihenfolge: ADR-04-Kategorie, dann Prio aus `MVP_BACKLOG_18_DOMAINS.md`.
+   `NotificationPort`) ausstehend.
+ - Home-Banner (nicht `FakeModeBanner`) ausstehend.
+ - Feature-Ordner `apps/emma_app/lib/features/mobility_guarantee/`
+-  existiert, Logik leer.
++  **existiert nicht mehr** (Alt-Ordner zwischen 2026-04-16 und
++  2026-04-24 rueckgebaut; Wiederaufbau als Teil von #31 offen —
++  Scope-Entscheidung siehe Offene Entscheidungen Nr. 6).
+ - Task #31.
+ 
+ ---
+@@ -173,12 +175,12 @@ Pfade lenken**.
+ 
+ | Domaene                        | Paket-Zustand                               | Post-MVP-Scope (grob)                                   |
+ |--------------------------------|---------------------------------------------|---------------------------------------------------------|
+-| ci_co                          | Stub-Screen                                 | CI/CO-Flow, Tagesdeckel, Positioning                    |
++| ci_co                          | Stub-Screen `apps/.../check_in_out/`        | CI/CO-Flow, Tagesdeckel, Positioning                    |
+ | on_demand                      | kein Paket                                   | Flex-/Ridepooling-Buchung                               |
+ | sharing_integrations           | kein Paket                                   | GBFS-Anbindung, Reservierung                            |
+ | taxi_integrations              | kein Paket                                   | Taxi-Dispatch, Festpreis/Taxameter                      |
+-| partnerhub (M12)               | `domain_partnerhub` (leer)                   | Adapter-Registry, SLA-Monitoring                        |
+-| migration_factory (M16)        | Stub-Screen                                 | Alt-zu-Neu-Mapping, Cutover, Rollback                   |
++| partnerhub (M12)               | `domain_partnerhub` (leer), **kein App-Feature-Ordner** (rueckgebaut) | Adapter-Registry, SLA-Monitoring              |
++| migration_factory (M16)        | **kein Paket, kein App-Feature-Ordner** (rueckgebaut)                  | Alt-zu-Neu-Mapping, Cutover, Rollback         |
+ | crm_and_service (M09)          | `domain_customer_service` (leer)             | Anliegen/Tickets, Nachrichten                           |
+ | analytics_and_reporting (M14)  | `domain_reporting` (leer)                    | Event-Erfassung Consent-gesteuert                       |
+ | support_and_incident_handling (M13) | kein Paket                             | Stoerungs-Banner, Push                                  |
+@@ -194,6 +196,8 @@ Pfade lenken**.
+ | 3 | Fake-First-Pflicht ueber die 6 MVP-Domaenen fassen oder Regel aus `CLAUDE.md` streichen | vor Beta-Phase | Task #32 |
+ | 4 | PSP-Entscheidung M10                                  | vor M03/M10-Produktivbetrieb | [../product/PRODUKT.md](../product/PRODUKT.md) (Modul M10) |
+ | 5 | OIDC/SSO-Entry-Point                                  | vor oeffentlichem Beta     | [../architecture/MAPPING.md](../architecture/MAPPING.md), M01                           |
++| 6 | Scope-Entscheidung: `mobility_guarantee`, `partnerhub`, `migration_factory` — absichtlich rueckgebaut oder Wiederaufbau? | vor MVP-Domaene #31 start | `docs/audit/repo_state_review_CURRENT.md` §E/§J |
++| 7 | TariffPort-Signatur gegen SPEC M11 heben (`quote`, `listProducts`, Cent-Preise) | vor #29 Ticketing | `docs/audit/repo_state_review_CURRENT.md` §E |
+ 
+ ---
+ 
+@@ -218,13 +222,16 @@ Erledigt seit 2026-04-24:
+ 
+ **Kurzfristig (Wochen):**
+ 
+-1. Task #46 umsetzen (employer_mobility Provider-Hoist).
+-2. Task #47 umsetzen (journey Provider-Hoist, groesserer Konsumentenkreis).
+-3. `fake_identity` bauen (Task #36), `domain_identity`-Barrel fixen
++1. Task #48 umsetzen (TariffPort-Heben + Cent-Preise) — **blockt #29**.
++2. Task #50 umsetzen (Scope-Entscheidung M07/M12/M16) — **blockt #31**.
++3. Task #49 umsetzen (Doku-Sync apps/README, trip_boundary_rules).
++4. Task #46 umsetzen (employer_mobility Provider-Hoist).
++5. Task #47 umsetzen (journey Provider-Hoist, groesserer Konsumentenkreis).
++6. `fake_identity` bauen (Task #36), `domain_identity`-Barrel fixen
+    (Task #35).
+-4. `fake_tariff` bauen, `TariffPort` gegen SPECS_MVP (M11) validieren.
+-5. Secret-Handling fuer Release-Build klaeren (Task #43).
+-6. Pre-Commit-Hook `melos run analyze` (Task #33).
++7. `fake_tariff` bauen gegen neuen `TariffPort` (nach #48).
++8. Secret-Handling fuer Release-Build klaeren (Task #43).
++9. Pre-Commit-Hook `melos run analyze` (Task #33).
+ 
+ **Mittelfristig (Sprints):**
+ 
+@@ -244,10 +251,18 @@ Erledigt seit 2026-04-24:
+ 
+ ## Historie der wesentlichen Aenderungen
+ 
+-- 2026-04-24: Task #37 (Auth-Provider-Hoist) als erledigt markiert;
+-  `feature_auth` ist Riverpod-frei, Provider liegen in App-Shell. Offene
+-  Provider-Hoists jetzt Tasks #46 (employer_mobility) und #47 (journey).
+-  ADR-05-Restpunkte als Tasks #43, #44, #45 angelegt.
++- 2026-04-24 (Nachmittag): Externes Audit
++  `docs/audit/repo_state_review_CURRENT.md` eingeflossen. Ghost-Features
++  (`mobility_guarantee`, `partnerhub`, `migration`) korrigiert —
++  App-Feature-Ordner existieren nicht mehr. TariffPort-Drift gegen
++  SPEC M11 und `double`-Preise in Tarif-/Payment-Modellen als neue
++  Entscheidungen Nr. 6/7 gelistet. Scope-Entscheidung M07/M12/M16
++  expliziert.
++- 2026-04-24 (Vormittag): Task #37 (Auth-Provider-Hoist) als erledigt
++  markiert; `feature_auth` ist Riverpod-frei, Provider liegen in
++  App-Shell. Offene Provider-Hoists jetzt Tasks #46 (employer_mobility)
++  und #47 (journey). ADR-05-Restpunkte als Tasks #43, #44, #45
++  angelegt.
+ - 2026-04-23: Volle Aktualisierung nach ADR-05 3c-Abschluss. Struktur
+   auf ADR-04-Kategorien umgestellt. Prozent-Reifegrade neu geschaetzt.
+   Referenzen auf [../architecture/MAPPING.md](../architecture/MAPPING.md),

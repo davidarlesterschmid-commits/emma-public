@@ -1,0 +1,17 @@
+name: emma_contracts
+description: Shared API and event DTOs — port interfaces and transport models.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  meta: any
+  domain_wallet: any
+  domain_journey: any
+  domain_rules: any
+  domain_ticketing: any
+
+dev_dependencies:
+  test: any

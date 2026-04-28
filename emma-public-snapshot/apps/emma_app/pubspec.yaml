@@ -1,0 +1,63 @@
+name: emma_app
+description: emma customer app — unified mobility frontend for Central Germany
+publish_to: none
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: any
+  # Workspace-interne Packages
+  emma_core: any
+  emma_contracts: any
+  emma_ui_kit: any
+  emma_testkit: any
+  feature_auth: any
+  feature_employer_mobility: any
+  feature_journey: any
+  adapter_gemini: any
+  adapter_maps: any
+  adapter_trias: any
+  fake_chat: any
+  fake_guarantee: any
+  fake_customer_account: any
+  fake_maps: any
+  fake_settings: any
+  fake_tariff: any
+  domain_customer_service: any
+  domain_employer_mobility: any
+  domain_identity: any
+  domain_journey: any
+  domain_reporting: any
+  domain_rules: any
+  domain_ticketing: any
+  domain_wallet: any
+  domain_partnerhub: any
+  feature_ticketing: any
+  fake_ticketing: any
+  # Externe Dependencies
+  dio: ^5.8.0+1
+  flutter_riverpod: ^3.0.3
+  flutter_secure_storage: ^9.2.4
+  freezed_annotation: ^3.1.0
+  go_router: ^16.3.0
+  http: ^1.5.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: any
+  fake_realtime: any
+  build_runner: any
+  freezed: any
+  json_serializable: any
+
+flutter:
+  uses-material-design: true
+  generate: true

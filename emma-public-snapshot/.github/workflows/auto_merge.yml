@@ -1,0 +1,322 @@
+name: Auto-merge (stage 3)
+
+on:
+  pull_request:
+    branches: [main]
+    types: [ready_for_review, synchronize, reopened]
+  issue_comment:
+    types: [created, edited]
+
+concurrency:
+  group: auto-merge-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  checks: read
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto-merge when gates are PASS (R2 only)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          import urllib.error
+          import urllib.request
+          from datetime import datetime, timezone
+          from typing import Any
+
+          def info(msg: str) -> None:
+              print(f"Auto-merge: {msg}")
+
+          def err(msg: str) -> None:
+              print(f"::error::Auto-merge: {msg}")
+
+          gh_token = (os.environ.get("GITHUB_TOKEN") or "").strip()
+          linear_key = (os.environ.get("LINEAR_API_KEY") or "").strip()
+          if not gh_token:
+              err("GITHUB_TOKEN missing.")
+              sys.exit(1)
+          if not linear_key:
+              info("LINEAR_API_KEY missing — skip auto-merge (cannot verify Linear GATE OUTCOME PASS).")
+              sys.exit(0)
+
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
+              event = json.load(f)
+
+          repo = event.get("repository") or {}
+          repo_full = str(repo.get("full_name") or "").strip()
+          if not repo_full:
+              err("Missing repository.full_name in event.")
+              sys.exit(1)
+          api_base = f"https://api.github.com/repos/{repo_full}"
+
+          def gh_request(method: str, url: str, payload: dict[str, Any] | None = None) -> Any:
+              data = None
+              headers = {
+                  "Authorization": f"Bearer {gh_token}",
+                  "Accept": "application/vnd.github+json",
+                  "User-Agent": "emma-auto-merge",
+              }
+              if payload is not None:
+                  data = json.dumps(payload).encode("utf-8")
+                  headers["Content-Type"] = "application/json"
+              req = urllib.request.Request(url, data=data, method=method, headers=headers)
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  txt = resp.read().decode("utf-8", errors="replace")
+              return json.loads(txt) if txt.strip() else {}
+
+          def linear_graphql(query: str, variables: dict[str, Any] | None = None) -> Any:
+              payload: dict[str, Any] = {"query": query}
+              if variables is not None:
+                  payload["variables"] = variables
+              data = json.dumps(payload).encode("utf-8")
+              req = urllib.request.Request(
+                  "https://api.example.invalid/graphql",
+                  data=data,
+                  method="POST",
+                  headers={
+                      "Authorization": linear_key,
+                      "Content-Type": "application/json",
+                      "User-Agent": "emma-auto-merge",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  txt = resp.read().decode("utf-8", errors="replace")
+              return json.loads(txt)
+
+          def parse_pr_number_from_event(ev: dict[str, Any]) -> int:
+              if "pull_request" in ev and isinstance(ev.get("pull_request"), dict):
+                  return int((ev["pull_request"] or {}).get("number") or 0)
+              issue = ev.get("issue") or {}
+              # issue_comment event: issue.number corresponds to PR number if it's a PR.
+              return int(issue.get("number") or 0)
+
+          pr_number = parse_pr_number_from_event(event)
+          if not pr_number:
+              info("No PR number in event — skip.")
+              sys.exit(0)
+
+          pr = gh_request("GET", f"{api_base}/pulls/{pr_number}")
+          if not isinstance(pr, dict) or not pr.get("number"):
+              err("Failed to load PR via API.")
+              sys.exit(1)
+
+          is_draft = pr.get("draft") is True
+          if is_draft:
+              info("PR is draft — skip.")
+              sys.exit(0)
+
+          state = str(pr.get("state") or "").upper()
+          if state != "OPEN":
+              info(f"PR state={state} — skip.")
+              sys.exit(0)
+
+          pr_body = str(pr.get("body") or "")
+          pr_url = str(pr.get("html_url") or "")
+          head_sha = str(((pr.get("head") or {}).get("sha") or "")).strip()
+          head7 = head_sha[:7].upper()
+          if not head_sha:
+              err("Missing PR head sha.")
+              sys.exit(1)
+
+          # Gate: only R2 auto-merge.
+          m_risk = re.search(r"\*\*R([0-5])\*\*", pr_body, re.I)
+          risk = f"R{m_risk.group(1)}" if m_risk else "?"
+          if risk != "R2":
+              info(f"risk={risk} (not R2) — skip.")
+              sys.exit(0)
+
+          # 1) Required checks must be success for current head sha.
+          checks = gh_request("GET", f"{api_base}/commits/{head_sha}/check-runs?per_page=100")
+          check_runs = checks.get("check_runs") if isinstance(checks, dict) else None
+          if not isinstance(check_runs, list):
+              err("Failed to read check-runs for head sha.")
+              sys.exit(1)
+
+          # For each check name, consider the latest run.
+          latest: dict[str, dict[str, Any]] = {}
+          for cr in check_runs:
+              if not isinstance(cr, dict):
+                  continue
+              name = str(cr.get("name") or "")
+              if not name:
+                  continue
+              prev = latest.get(name)
+              started = str(cr.get("started_at") or cr.get("completed_at") or "")
+              prev_started = str((prev or {}).get("started_at") or (prev or {}).get("completed_at") or "")
+              if prev is None or started >= prev_started:
+                  latest[name] = cr
+
+          required = {"analyze-and-test", "pr-body", "r3-gate", "claude-gate"}
+          missing = sorted(required - set(latest.keys()))
+          if missing:
+              info(f"Required check-runs not visible yet for head sha: {', '.join(missing)} — skip.")
+              sys.exit(0)
+
+          def check_state(cr: dict[str, Any]) -> str:
+              status = str(cr.get("status") or "").upper()
+              conclusion = str(cr.get("conclusion") or "").upper()
+              if status and status != "COMPLETED":
+                  return "PENDING"
+              return conclusion or status or "UNKNOWN"
+
+          bad: list[str] = []
+          for name in sorted(required):
+              state = check_state(latest[name])
+              if state != "SUCCESS":
+                  bad.append(f"{name}:{state}")
+          if bad:
+              # This workflow is an optional helper and should not fail the PR while required checks are
+              # pending or simply not green yet. It will rerun on subsequent events.
+              info("Not all required checks are green yet — skip: " + ", ".join(bad))
+              sys.exit(0)
+
+          # 2) Claude marker must be PASS for current head sha.
+          issue_comments = gh_request("GET", f"{api_base}/issues/{pr_number}/comments?per_page=100&page=1")
+          all_text = "\n\n".join(str(c.get("body") or "") for c in issue_comments if isinstance(c, dict))
+          start = "<!-- EMMA_CLAUDE_MARKER_START -->"
+          end = "<!-- EMMA_CLAUDE_MARKER_END -->"
+
+          blocks: list[dict[str, str]] = []
+          cursor = 0
+          while True:
+              s = all_text.find(start, cursor)
+              if s < 0:
+                  break
+              e = all_text.find(end, s)
+              if e < 0:
+                  break
+              raw = all_text[s + len(start) : e].strip()
+              data: dict[str, str] = {}
+              for line in raw.splitlines():
+                  line = line.strip()
+                  if not line or ":" not in line:
+                      continue
+                  k, v = line.split(":", 1)
+                  data[k.strip().upper()] = v.strip().upper()
+              if data:
+                  blocks.append(data)
+              cursor = e + len(end)
+
+          matched: dict[str, str] | None = None
+          for data in blocks:
+              sha = (data.get("EMMA_HEAD_SHA") or "").upper()
+              if sha and (head7.startswith(sha) or sha.startswith(head7)):
+                  matched = data
+          if not matched:
+              err("No EMMA_CLAUDE_MARKER found for current head sha.")
+              sys.exit(1)
+
+          if (matched.get("EMMA_CLAUDE_STATUS") or "") != "OUTCOME_RECORDED":
+              err(f"Claude marker status not OUTCOME_RECORDED: {matched.get('EMMA_CLAUDE_STATUS')}")
+              sys.exit(1)
+          if (matched.get("EMMA_CLAUDE_OUTCOME") or "") != "PASS":
+              err(f"Claude outcome not PASS: {matched.get('EMMA_CLAUDE_OUTCOME')}")
+              sys.exit(1)
+          if (matched.get("EMMA_CLAUDE_PASS") or "") != "TRUE":
+              err("Claude marker EMMA_CLAUDE_PASS not TRUE for PASS.")
+              sys.exit(1)
+
+          # 3) Linear must contain GATE OUTCOME PASS for this issue + PR.
+          linear_id_m = re.search(r"\bEMM-\d+\b", pr_body, re.I)
+          linear_id = linear_id_m.group(0).upper() if linear_id_m else ""
+          if not linear_id:
+              err("Missing Linear ID in PR body.")
+              sys.exit(1)
+
+          issue_q = "query Issue($id: String!) { issue(id: $id) { id identifier comments(last: 50) { nodes { body createdAt } } } }"
+          issue_resp = linear_graphql(issue_q, {"id": linear_id})
+          issue = ((issue_resp.get("data") or {}).get("issue") or {}) if isinstance(issue_resp, dict) else {}
+          comments = (((issue.get("comments") or {}).get("nodes")) or []) if isinstance(issue, dict) else []
+          if not isinstance(comments, list) or not comments:
+              err("Linear issue has no comments to verify GATE OUTCOME.")
+              sys.exit(1)
+
+          gate_ok = False
+          for c in reversed(comments):
+              if not isinstance(c, dict):
+                  continue
+              body = str(c.get("body") or "")
+              if "## GATE OUTCOME" not in body:
+                  continue
+              if pr_url and pr_url not in body:
+                  continue
+              if re.search(r"(?m)^Verdict:\\s*PASS\\s*$", body) and re.search(r"(?m)^Status:\\s*PASS\\s*$", body):
+                  gate_ok = True
+                  break
+          if not gate_ok:
+              err("Linear GATE OUTCOME PASS not found for this PR URL.")
+              sys.exit(1)
+
+          # Merge (squash) guarded by head sha.
+          info("All gates PASS. Merging PR via GitHub API (squash).")
+          merge_payload = {
+              "merge_method": "squash",
+              "sha": head_sha,
+              "commit_title": f"{pr.get('title') or ''}",
+          }
+          merge_resp = gh_request("PUT", f"{api_base}/pulls/{pr_number}/merge", merge_payload)
+          if not (isinstance(merge_resp, dict) and merge_resp.get("merged") is True):
+              err(f"Merge failed: {merge_resp}")
+              sys.exit(1)
+          merge_sha = str(merge_resp.get("sha") or "")
+          info(f"Merged: {merge_sha}")
+
+          # Linear ABSCHLUSS (best-effort).
+          now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+          abs_body = "\n".join(
+              [
+                  f"## ABSCHLUSS — {linear_id}",
+                  "",
+                  "Agent: GitHub Actions (auto_merge.yml)",
+                  "Endzustand: MERGED",
+                  f"PR: {pr_url}",
+                  f"Branch: {str(((pr.get('head') or {}).get('ref') or '')).strip()}",
+                  f"Commit-SHA: {head_sha[:7]}",
+                  f"Merge-SHA: {merge_sha}",
+                  "Snapshot-Version (Start): n/a",
+                  "Snapshot (Abschluss): n/a (Automation)",
+                  "Risikoklasse: R2",
+                  "Gate-Outcome: PASS",
+                  "Agent-Blocker: none",
+                  "",
+                  "Scope umgesetzt:",
+                  "",
+                  "- Auto-merge after claude-gate PASS + CI green + Linear GATE OUTCOME PASS",
+                  "",
+                  "Tests:",
+                  "",
+                  "- (CI) analyze-and-test PASS",
+                  "",
+                  "Follow-ups:",
+                  "",
+                  "- (keine)",
+                  "",
+                  "Naechster Schritt:",
+                  "",
+                  "- (keiner)",
+                  "",
+                  "Status: FINAL",
+              ]
+          )
+          comment_m = "mutation CommentCreate($issueId: String!, $body: String!) { commentCreate(input: { issueId: $issueId, body: $body }) { success } }"
+          issue_uuid = str(issue.get("id") or "")
+          if issue_uuid:
+              linear_graphql(comment_m, {"issueId": issue_uuid, "body": abs_body})
+              info("Posted Linear ABSCHLUSS comment.")
+          else:
+              info("Linear ABSCHLUSS skipped (issue UUID missing).")
+
+          info("Done.")
+          PY

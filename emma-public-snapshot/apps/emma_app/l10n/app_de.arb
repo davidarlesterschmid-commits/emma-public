@@ -1,0 +1,17 @@
+{
+  "@@locale": "de",
+  "appTitle": "emma",
+  "settingsScreenTitle": "Einstellungen",
+  "consentScreenAppBar": "Datenschutz & Einwilligungen",
+  "settingsEmptyHint": "Es sind noch keine weiteren Einstellungen hinterlegt. Du kannst Einwilligungen unten anpassen.",
+  "openConsentAction": "Zu Einwilligungen wechseln",
+  "consentToggleAnalytics": "Nutzungsanalyse (Stub)",
+  "consentToggleMarketing": "Personalisierung / Marketing (Stub)",
+  "errorRetry": "Erneut versuchen",
+  "errorUnknown": "Unbekannter Fehler",
+  "profileListSettings": "Einstellungen",
+  "semanticsSettingsLoading": "Einstellungen werden geladen",
+  "semanticsConsentLoading": "Einwilligungen werden geladen",
+  "semanticsError": "Fehler",
+  "semanticsToggles": "Einwilligungen, Schalter"
+}

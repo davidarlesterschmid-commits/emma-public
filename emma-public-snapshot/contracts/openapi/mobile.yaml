@@ -1,0 +1,58 @@
+openapi: 3.1.0
+info:
+  title: emma Mobile API
+  version: 0.1.0
+paths:
+  /journeys/search:
+    post:
+      summary: Search journey options
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JourneySearchRequest'
+      responses:
+        '200':
+          description: Journey search result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneySearchResponse'
+components:
+  schemas:
+    JourneySearchRequest:
+      type: object
+      required:
+        - originId
+        - destinationId
+      properties:
+        originId:
+          type: string
+        destinationId:
+          type: string
+    JourneyOption:
+      type: object
+      required:
+        - id
+        - label
+        - originId
+        - destinationId
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        originId:
+          type: string
+        destinationId:
+          type: string
+    JourneySearchResponse:
+      type: object
+      required:
+        - options
+      properties:
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/JourneyOption'

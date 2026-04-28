@@ -1,0 +1,10 @@
+name: domain_planning
+description: Planning domain skeleton for simulated mobility option planning.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dev_dependencies:
+  test: any

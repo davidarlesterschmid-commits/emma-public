@@ -1,0 +1,29 @@
+# Minimal required check (branch protection can require this to pass).
+# EMM-227 — emma-public
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confirm workflow tree is well-formed
+        run: test -d .github/workflows
+
+      - name: Succeed
+        run: echo "CI OK — required status for EMM-227 / branch protection"

@@ -1,0 +1,164 @@
+{
+  "meta": {
+    "issue": "EMM-222",
+    "title": "Public-Readiness Audit (read-only)",
+    "audit_date": "2026-04-28",
+    "repo_path_audited": "<LOCAL_REPO_PATH>",
+    "git": {
+      "status": "clean",
+      "branch": "main",
+      "note": "Branch reported 3 commits behind origin/main at scan time; audit based on local tree."
+    },
+    "scan_methods": [
+      "git status; git branch --show-current; git ls-files (748 paths)",
+      "ripgrep-style searches: token/secret patterns, PII path hints, internal URLs, binary extensions",
+      "no gitleaks/trufflehog in PATH; no third-party secret scanner executed"
+    ],
+    "verdict": "GO",
+    "verdict_rationale": "P1-PII (F002) mitigated. Root LICENSE is proprietary (All rights reserved); repo may be public for transparency — not Open Source. Before flipping GitHub visibility, run a dependency license compliance review (copyleft / distribution obligations).",
+    "open_prerequisites_before_public_visibility": [
+      "Dependency and transitive license audit (ensure no obligation conflicts with proprietary distribution model)."
+    ],
+    "remediation": {
+      "issue": "EMM-223",
+      "date": "2026-04-28",
+      "pii_f002": "mitigated",
+      "license_f003": "mitigated_proprietary",
+      "root_license_file": "LICENSE",
+      "policy": "Public visibility allowed; not OSS; third-party components remain under their own licenses; do not modify third-party license terms in-repo."
+    }
+  },
+  "findings": [
+    {
+      "id": "EMM-222-F001",
+      "severity": "P0",
+      "category": "secrets",
+      "summary": "No evidence of committed live API keys, GitHub PATs, PEM/private keys, or gcp/aws-style long tokens in tracked files",
+      "paths": [],
+      "evidence": "Searches for ghp_, github_pat_, AIza..., BEGIN PRIVATE KEY, SK-..., AKIA... returned no matches; .env and google-services files not in tree",
+      "risk": "If such material appeared in history, it would be out of scope of this file-only scan",
+      "recommended_action": "KEEP",
+      "status": "unchanged",
+      "notes": "Ongoing: run dedicated secret scan on full git history before first public push if not already done"
+    },
+    {
+      "id": "EMM-222-F002",
+      "severity": "P1",
+      "category": "pii",
+      "summary": "Echte E-Mail-Adresse und Windows-Benutzerpfad in mehreren Markdown-Dateien",
+      "paths_touched_by_emm_223": [
+        "docs/planning/STATUS.md",
+        "docs/_archive/2026-04-consolidation/MODUL_AUDIT_2026-04-08.md",
+        "docs/_archive/2026-04-consolidation/GAP_REPORT_JSON_SCHEMA_V1.md",
+        "docs/_archive/2026-04-consolidation/ROADMAP_NEXT_STEPS_2026-04-08.md",
+        "docs/_archive/2026-04-consolidation/EMMA_REPO_ZUSTAND_2026-04-14.md",
+        "docs/_archive/2026-04-consolidation/vscode_dev_and_test_guide.md",
+        "docs/audit/codex_desktop_setup_audit.md",
+        "docs/audit/RECOVERY_REPORT_2026-04.md",
+        "docs/audit/repo_state_review_2026-04-24.md",
+        "docs/audit/repo_state_review_2026-04-24.json",
+        "docs/technical/ENTWICKLER.md"
+      ],
+      "evidence": "Former occurrence of a real e-mail inside local path strings and multiple C:\\Users\\... absolute paths; redacted to <LOCAL_REPO_PATH> (EMM-223).",
+      "risk": "Was: Personenbezug und Rechnerstruktur; now mitigated in listed files.",
+      "recommended_action": "REDACT",
+      "status": "mitigated"
+    },
+    {
+      "id": "EMM-222-F003",
+      "severity": "P1",
+      "category": "legal_license",
+      "summary": "Root-LICENSE und README: proprietary / All rights reserved (nicht Open Source)",
+      "paths": [
+        "LICENSE",
+        "README.md",
+        "pubspec.yaml",
+        "apps/emma_app/pubspec.yaml"
+      ],
+      "risk": "Vor oeffentlicher Sichtbarkeit: Abhaengigkeitslizenzen pruefen (Copyleft, Weitergabe, Offenlegung).",
+      "recommended_action": "NEEDS_LICENSE_REVIEW",
+      "status": "mitigated",
+      "rest_blocker_for_public": false,
+      "notes": "Project code: All rights reserved. Third-party deps: unchanged; subject to their licenses. SPDX in pubspec optional follow-up."
+    },
+    {
+      "id": "EMM-222-F004",
+      "severity": "P2",
+      "category": "governance_meta",
+      "summary": "SECURITY.md und CONTRIBUTING.md fehlen",
+      "paths": [],
+      "risk": "Fehlende Erwartungshaltung an Meldung von Sicherheitsproblemen und Beitraege; untypisch fuer oeffentliche GitHub-Projekte",
+      "recommended_action": "KEEP (add templates in follow-up) / NEEDS_LEGAL_REVIEW for SECURITY contact wording",
+      "status": "unchanged"
+    },
+    {
+      "id": "EMM-222-F005",
+      "severity": "P2",
+      "category": "disclosure",
+      "summary": "Verknuepfung operativer Infrastruktur: GitHub-Org/Repo-Handle und viele linear.app-Links in Doku/Workflows",
+      "paths": [
+        "docs/operations/CONTEXT_SNAPSHOT.md",
+        "docs/planning/LINEAR_EXECUTION_MAP.md"
+      ],
+      "risk": "Enthuellt Organisations-Workspace, Issue-Nummern und Projektnamen; meist kein Geheimnis, aber strategische Transparenz",
+      "recommended_action": "KEEP oder REDACT je nach Kommunikationsziel; nicht security-kritisch per se",
+      "status": "unchanged"
+    },
+    {
+      "id": "EMM-222-F006",
+      "severity": "P2",
+      "category": "ci_supply_chain",
+      "summary": "GitHub Actions nutzen repository secrets (LLM, Linear); CI erzwingt Linear-Ticket-Referenz in PRs",
+      "paths": [
+        ".github/workflows/dart.yml",
+        ".github/workflows/llm_review.yml",
+        ".github/workflows/claude_review.yml",
+        ".github/workflows/auto_merge.yml"
+      ],
+      "risk": "Geheimnisse in Fork-PR-Workflows sind standardmaessig nicht an Forks gepaart; PR-Governance kann externe Contributor ohne Linear-Zugang ausschliessen oder frustrieren",
+      "recommended_action": "KEEP (workflows) / dokumentieren in CONTRIBUTING (Folge-PR) welche Workflows von Fork-PRs erwarten, zu skippen sind, oder was Linear-Pflicht bedeutet",
+      "status": "unchanged"
+    },
+    {
+      "id": "EMM-222-F007",
+      "severity": "P2",
+      "category": "operational",
+      "summary": "Self-hosted Windows Runner Test-Workflow existiert (workflow_dispatch)",
+      "paths": [".github/workflows/runner-test.yml"],
+      "risk": "Hinweis, dass self-hosted Runner genutzt werden; bei public wird das sichtbar; niedrig solange nur manuell dispatch",
+      "recommended_action": "KEEP oder MOVE_PRIVATE if repo wird rein community-gehostet ohne private Runner",
+      "status": "unchanged"
+    },
+    {
+      "id": "EMM-222-F008",
+      "severity": "P3",
+      "category": "data_quality",
+      "summary": "Beispiel-/Demo-E-Mails in Code (z. B. demo@emma.de) und oeffentlich erwartbare Platzhalter",
+      "paths": [
+        "packages/fakes/fake_identity/lib/src/fake_account_catalog.dart",
+        "apps/emma_app/lib/features/trips/presentation/screens/trip_detail_screen.dart"
+      ],
+      "risk": "Gering; eindeutig fiktiv/Beispiel",
+      "recommended_action": "KEEP",
+      "status": "unchanged"
+    },
+    {
+      "id": "EMM-222-F009",
+      "severity": "P3",
+      "category": "artifacts",
+      "summary": "Binaerdateien: App-Icons, favicon, gradle-wrapper.jar; keine Zip/Dumps/SQLite im Sample",
+      "paths": [
+        "apps/emma_app/android/gradle/wrapper/gradle-wrapper.jar"
+      ],
+      "risk": "Normal fuer Flutter-Projekte; Wrapper-JAR ist ueblich",
+      "recommended_action": "KEEP",
+      "status": "unchanged"
+    }
+  ],
+  "negative_findings": {
+    "committed_env_files": false,
+    "google_services_plist": false,
+    "pem_p12_in_tree": false,
+    "large_zip_or_dump": false
+  }
+}

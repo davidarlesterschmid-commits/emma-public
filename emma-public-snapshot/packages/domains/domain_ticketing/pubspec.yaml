@@ -1,0 +1,14 @@
+name: domain_ticketing
+description: |
+  Ticketing domain — UC-IDs, product catalog, and purchase contract (M03, Dart-only).
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  meta: any
+
+dev_dependencies:
+  test: any

@@ -1,0 +1,26 @@
+name: feature_auth
+description: Auth & customer-account feature — data-layer impls and UI primitives. Riverpod wiring lives in the app shell.
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Workspace-interne Packages
+  domain_identity: any
+  fake_identity: any
+  # Externe Dependencies
+  dio: ^5.8.0+1
+  flutter_riverpod: ^3.0.3
+  flutter_secure_storage: ^9.2.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: any
+
+flutter:
+  uses-material-design: true
