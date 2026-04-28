@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate labels and paths; merge or skip
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const core = require('@actions/core');
