@@ -1,0 +1,31 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Editor and local workspace files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment and credential files
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Build and dependency artifacts
+node_modules/
+build/
+dist/
+coverage/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+
+# Logs
+*.log
+logs/
